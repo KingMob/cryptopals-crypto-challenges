@@ -3,4 +3,5 @@
   :url "https://github.com/KingMob/cryptopals-crypto-challenges"
 
   :dependencies [[org.clojure/clojure "1.9.0-alpha15"]
-                 [commons-codec "1.10"]])
+                 [commons-codec "1.10"]
+                 [medley "0.8.4"]])

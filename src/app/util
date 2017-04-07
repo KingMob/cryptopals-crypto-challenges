@@ -1,6 +1,6 @@
-(ns app.util
+(ns app.core
   (:require [clojure.spec :as s]
-            [clojure.string :as str])
+            [clojure.test :as t])
   (:import [org.apache.commons.codec.binary Base64 Hex]))
 
 (def hex-re #"[0-9a-fA-F]+")
@@ -35,9 +35,6 @@
   {:pre [(s/valid? ::byte-array bs)]}
   (Base64/encodeBase64String bs))
 
-(defn byte-array->string [bs]
-  (str/join (map char bs)))
-
 
 ;; (= "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t" (base64-encode (hex->byte-array "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d")))
 
@@ -51,8 +48,8 @@
          (= (count bs1) (count bs2))]}
   (byte-array (map bit-xor bs1 bs2)))
 
-;; (let [bs1 (hex->byte-array "1c0111001f010100061a024b53535009181c")
-;;       bs2 (hex->byte-array "686974207468652062756c6c277320657965")
-;;       xorbs (xor bs1 bs2)
-;;       res (hex-encode xorbs)]
-;;   (= "746865206b696420646f6e277420706c6179" res))
+(let [bs1 (hex->byte-array "1c0111001f010100061a024b53535009181c")
+      bs2 (hex->byte-array "686974207468652062756c6c277320657965")
+      xorbs (xor bs1 bs2)
+      res (hex-encode xorbs)]
+  (= "746865206b696420646f6e277420706c6179" res))
