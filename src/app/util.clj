@@ -1,4 +1,4 @@
-(ns app.core
+(ns app.util
   (:require [clojure.spec :as s]
             [clojure.test :as t])
   (:import [org.apache.commons.codec.binary Base64 Hex]))
