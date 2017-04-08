@@ -63,13 +63,13 @@
 
 ;;; Set 1, challenge 3
 (let [xor-chars (map char (range 32 125))
-      cipher-text "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"
-      cipher-bytes (hex->byte-array cipher-text)]
+      cipher-hex "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"
+      cipher-bytes (hex->byte-array cipher-hex)]
   (->> (chi2-results xor-chars cipher-bytes)
        (sort-by second)
        (first)))
 
-;; Set 1, Challenge 4
+;; Set 1, challenge 4
 (let [xor-chars (map char (range 32 127))
       lines (str/split-lines (slurp (io/file (io/resource "4.txt"))))]
   (->> lines
@@ -77,3 +77,8 @@
        (mapcat (partial chi2-results xor-chars))
        (sort-by second)
        (take 3)))
+
+;; Set 1, challenge 5
+(def ice-ice-baby "Burning 'em, if you ain't quick and nimble
+I go crazy when I hear a cymbal")
+(byte-array->hex (repeating-xor-str "ICE" ice-ice-baby))

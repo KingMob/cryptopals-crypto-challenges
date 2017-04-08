@@ -38,18 +38,27 @@
 (defn byte-array->string [bs]
   (str/join (map #(char (bit-and 0xFF %)) bs)))
 
+(defn string->byte-array [s]
+  (byte-array (map byte s)))
 
 ;; (= "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t" (base64-encode (hex->byte-array "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d")))
 
 (defn hex-encode [^bytes bs]
   {:pre [(s/valid? ::byte-array bs)]}
   (Hex/encodeHexString bs))
+(defn byte-array->hex [^bytes bs] (hex-encode bs))
 
 (defn xor [bs1 bs2]
   {:pre [(s/valid? ::byte-array bs1)
          (s/valid? ::byte-array bs2)
          (= (count bs1) (count bs2))]}
   (byte-array (map bit-xor bs1 bs2)))
+
+(defn repeating-xor [key-bs bs]
+  (xor bs (byte-array (take (count bs) (cycle key-bs)))))
+
+(defn repeating-xor-str [key-str str]
+  (repeating-xor (string->byte-array key-str) (string->byte-array str)))
 
 ;; (let [bs1 (hex->byte-array "1c0111001f010100061a024b53535009181c")
 ;;       bs2 (hex->byte-array "686974207468652062756c6c277320657965")
