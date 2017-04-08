@@ -1,7 +1,6 @@
 (ns app.core
   (:require [app.util :refer :all]
             [clojure.spec :as s]
-            [clojure.java.io :as io]
             [clojure.string :as str :refer [upper-case lower-case]]
             [medley.core :refer [filter-keys map-vals map-keys]]))
 
@@ -33,8 +32,10 @@
   (normalized-frequencies {\space 18.29 \e 10.27 \t 7.51 \a 6.53 \o 6.16 \i 5.67 \n 5.71 \s 5.32 \r 4.99 \h 4.98 \l 3.32 \d 3.28 \u 2.28 \c 2.23 \m 2.03 \f 1.98 \w 1.07 \g 1.62 \p 1.50 \y 1.43 \b 1.26 \v 0.80 \k 0.56 \x 0.14 \j 0.10 \q 0.08 \z 0.05 \. 1.39 \, 1.35 \" 0.68 \- 0.48 \' 0.36 \? 0.14 \! 0.10 \; 0.09 \: 0.06}))
 
 (defn chi2-for-letter [c num-c num-total-chars]
-  {:pre [(s/valid? char? c) (s/valid? number? num-c)]}
-  (let [c-prob (en-letter-probabilities c 0.001)
+  {:pre [(s/valid? char? c)
+         (s/valid? pos-int? num-c)
+         (s/valid? (s/and pos-int? #(< num-c %)) num-total-chars)]}
+  (let [c-prob (en-letter-probabilities c 0.001) ; Non-existent letters cannot have 0 probability
         expected-num-c (* c-prob num-total-chars)]
     (/ (* (- num-c expected-num-c) (- num-c expected-num-c))
        expected-num-c)))
@@ -42,43 +43,29 @@
 (defn chi2 [hist]
   {:pre [(s/valid? ::hist hist)]}
   (let [num-total-chars (reduce-kv (fn [total k v] (+ total v)) 0 hist)]
-    (reduce-kv (fn [X2 k v]
-                 (+ X2 (chi2-for-letter k v num-total-chars)))
-               0
-               hist)))
-
-(def byte-fill (memoize (fn [size b] (byte-array size b))))
-
-(defn xor-with-byte-fill [bs b]
-  ;; (println bs)
-  (let [key-bytes (byte-fill (count bs) b)]
-    (xor bs key-bytes)))
+    (reduce-kv
+     (fn [X2 k v] (+ X2 (chi2-for-letter k v num-total-chars)))
+     0
+     hist)))
 
 (defn chi2-results [bytes-to-xor cipher-bytes]
+  {:pre [(s/valid? :app.util/byte-array bytes-to-xor)
+         (s/valid? :app.util/byte-array cipher-bytes)]}
   (for [c bytes-to-xor]
     (let [res (xor-with-byte-fill cipher-bytes (byte c))
           res-string (byte-array->string res)
           hist (letter-frequency (frequencies res-string))]
       [res-string (chi2 hist) c])))
 
-;;; Set 1, challenge 3
-(let [xor-chars (map char (range 32 125))
-      cipher-hex "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"
-      cipher-bytes (hex->byte-array cipher-hex)]
-  (->> (chi2-results xor-chars cipher-bytes)
-       (sort-by second)
-       (first)))
+(defn hamming [s1 s2]
+  {:pre [(s/valid? string? s1) (s/valid? string? s2) (= (count s1) (count s2))]}
+  (let [b1 (string->byte-array s1)
+        b2 (string->byte-array s2)]
+    (reduce
+     +
+     0
+     (map #(Long/bitCount %)
+          (map bit-xor b1 b2)))))
 
-;; Set 1, challenge 4
-(let [xor-chars (map char (range 32 127))
-      lines (str/split-lines (slurp (io/file (io/resource "4.txt"))))]
-  (->> lines
-       (map hex->byte-array)
-       (mapcat (partial chi2-results xor-chars))
-       (sort-by second)
-       (take 3)))
-
-;; Set 1, challenge 5
-(def ice-ice-baby "Burning 'em, if you ain't quick and nimble
-I go crazy when I hear a cymbal")
-(byte-array->hex (repeating-xor-str "ICE" ice-ice-baby))
+(defn normalized-hamming [s1 s2]
+  (/ (hamming s1 s2) (count s1)))
