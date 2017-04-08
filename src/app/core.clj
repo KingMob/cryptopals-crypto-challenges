@@ -1,7 +1,8 @@
 (ns app.core
   (:require [app.util :refer :all]
             [clojure.spec :as s]
-            [clojure.string :refer [upper-case lower-case]]
+            [clojure.java.io :as io]
+            [clojure.string :as str :refer [upper-case lower-case]]
             [medley.core :refer [filter-keys map-vals map-keys]]))
 
 (s/def ::probability (s/and number? #(<= 0 %) #(<= % 1)))
@@ -33,7 +34,7 @@
 
 (defn chi2-for-letter [c num-c num-total-chars]
   {:pre [(s/valid? char? c) (s/valid? number? num-c)]}
-  (let [c-prob (en-letter-probabilities c 0.01)
+  (let [c-prob (en-letter-probabilities c 0.001)
         expected-num-c (* c-prob num-total-chars)]
     (/ (* (- num-c expected-num-c) (- num-c expected-num-c))
        expected-num-c)))
@@ -46,11 +47,14 @@
                0
                hist)))
 
+(def byte-fill (memoize (fn [size b] (byte-array size b))))
+
 (defn xor-with-byte-fill [bs b]
-  (let [key-bytes (byte-array (count bs) b)]
+  ;; (println bs)
+  (let [key-bytes (byte-fill (count bs) b)]
     (xor bs key-bytes)))
 
-(defn chi2-results [cipher-bytes bytes-to-xor]
+(defn chi2-results [bytes-to-xor cipher-bytes]
   (for [c bytes-to-xor]
     (let [res (xor-with-byte-fill cipher-bytes (byte c))
           res-string (byte-array->string res)
@@ -58,10 +62,18 @@
       [res-string (chi2 hist) c])))
 
 ;;; Set 1, challenge 3
-(let [alphabet "abcdefghijklmnopqrstuvwxyz"
-      xor-chars (str alphabet (upper-case alphabet))
+(let [xor-chars (map char (range 32 125))
       cipher-text "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"
       cipher-bytes (hex->byte-array cipher-text)]
-  (->> (chi2-results cipher-bytes xor-chars)
+  (->> (chi2-results xor-chars cipher-bytes)
        (sort-by second)
        (first)))
+
+;; Set 1, Challenge 4
+(let [xor-chars (map char (range 32 127))
+      lines (str/split-lines (slurp (io/file (io/resource "4.txt"))))]
+  (->> lines
+       (map hex->byte-array)
+       (mapcat (partial chi2-results xor-chars))
+       (sort-by second)
+       (take 3)))
