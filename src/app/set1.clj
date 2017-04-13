@@ -75,3 +75,15 @@
                    (nthrest input-6)
                    (take-nth ksize)
                    (most-likely-xor-byte)))))})))
+
+
+;; Set 1, challenge 7
+(def key (string->data "YELLOW SUBMARINE"))
+(def input-7 (base64-decode (str/join (str/split-lines (slurp (io/file (io/resource "7.txt")))))))
+
+(def cipher (Cipher/getInstance "AES/ECB/NoPadding"))
+(.init cipher Cipher/DECRYPT_MODE (SecretKeySpec. (data->bytes key) "AES"))
+
+(println (data->string (bytes->data (.doFinal cipher (data->bytes input-7)))))
+;; Reading the output kind of makes wonder... If Suge Knight had threatened
+;; Vanilla Ice more, maybe we'd have been rid of him sooner

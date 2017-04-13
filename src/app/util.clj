@@ -69,6 +69,8 @@
          (= (count d1) (count d2))]}
   (map bit-xor d1 d2))
 
+
+
 (def byte-fill (memoize (fn [size b] (take size (repeat b)))))
 
 (defn xor-with-byte-fill [d b]
