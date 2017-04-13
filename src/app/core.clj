@@ -48,24 +48,37 @@
      0
      hist)))
 
-(defn chi2-results [bytes-to-xor cipher-bytes]
-  {:pre [(s/valid? :app.util/byte-array bytes-to-xor)
-         (s/valid? :app.util/byte-array cipher-bytes)]}
+(defn chi2-results [bytes-to-xor cipher-data]
+  {:pre [(s/valid? :app.util/data bytes-to-xor)
+         (s/valid? :app.util/data cipher-data)]}
   (for [c bytes-to-xor]
-    (let [res (xor-with-byte-fill cipher-bytes (byte c))
-          res-string (byte-array->string res)
+    (let [res (xor-with-byte-fill cipher-bytes c)
+          res-string (data->string res)
           hist (letter-frequency (frequencies res-string))]
-      [res-string (chi2 hist) c])))
+      {:xor-result res-string
+       :chi2 (chi2 hist)
+       :char c})))
 
-(defn hamming [s1 s2]
-  {:pre [(s/valid? string? s1) (s/valid? string? s2) (= (count s1) (count s2))]}
-  (let [b1 (string->byte-array s1)
-        b2 (string->byte-array s2)]
-    (reduce
-     +
-     0
-     (map #(Long/bitCount %)
-          (map bit-xor b1 b2)))))
+(def xor-search-bytes (concat (range 32 127) (range 0 31) (range 128 255))) ; Starts with printable chars
+(defn most-likely-xor-byte [d]
+  (:char (first (sort-by :chi2 (chi2-results xor-search-bytes d)))))
 
-(defn normalized-hamming [s1 s2]
-  (/ (hamming s1 s2) (count s1)))
+(defn hamming [d1 d2]
+  #_{:pre [(s/valid? :app.util/data d1)
+         (s/valid? :app.util/data d2)
+         (= (count d1) (count d2))]}
+  (reduce
+   +
+   0
+   (map #(Long/bitCount %)
+        (map bit-xor d1 d2))))
+
+(s/fdef hamming
+        :args (s/and (s/cat :d1 :app.util/data :d2 :app.util/data)
+                     #(= (count (:d1 %)) (count (:d2 %))))
+        :ret nat-int?
+        :fn #(<= :ret (count (-> % :args :d1))))
+
+
+(defn normalized-hamming [d1 d2]
+  (/ (hamming d1 d2) (count d1)))
