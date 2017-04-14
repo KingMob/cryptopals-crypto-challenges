@@ -1,7 +1,10 @@
 (ns app.util
   (:require [clojure.spec :as s]
             [clojure.spec.test :as stest]
-            [clojure.string :as str])
+            [clojure.spec.gen :as gen]
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is]]
+            [taoensso.tufte :as tufte :refer [defnp p profiled profile]])
   (:import [org.apache.commons.codec.binary Base64 Hex]))
 
 (def hex-re #"[0-9a-fA-F]+")
@@ -31,10 +34,11 @@
 
 (defn data->bytes [d]
   {:pre [(s/valid? ::data d)]}
-  (into-array Byte/TYPE d))
+  #_(into-array Byte/TYPE d)
+  #_(into-array Byte/TYPE (map #(.byteValue %) d))
+  (byte-array d))
 
 (defn bytes->data [bs]
-  ;;; Warning: not safe to alter byte array after this, since it will alter vector too
   {:pre [(s/valid? ::byte-array bs)]}
   (vec (aclone bs)))
 
@@ -43,7 +47,7 @@
   {:pre [(s/valid? ::data d)]}
   (Base64/encodeBase64String (data->bytes d)))
 
-(defn base64-decode [^String s]
+(defn base64-decode [s]
   ;;; Using Apache common-codec
   {:pre [(s/valid? string? s)]}
   (bytes->data (Base64/decodeBase64 s)))
@@ -61,7 +65,9 @@
 
 (defn hex-decode [s]
   {:pre [(s/valid? ::hex-string s)]}
-  (Hex/decodeHex (char-array s)))
+  (bytes->data
+   (Hex/decodeHex
+    (.toCharArray s))))
 
 (defn xor [d1 d2]
   {:pre [(s/valid? ::data d1)
@@ -69,9 +75,13 @@
          (= (count d1) (count d2))]}
   (map bit-xor d1 d2))
 
+(deftest xor-identity
+  (let [sample-str (string->data "abc123")
+        id-str (string->data (repeat (count sample-str) 0))]
+    (is (= sample-str (xor sample-str id-str)))
+    (is (= id-str (xor sample-str sample-str)))))
 
-
-(def byte-fill (memoize (fn [size b] (take size (repeat b)))))
+(defn byte-fill [size b] (take size (repeat b)))
 
 (defn xor-with-byte-fill [d b]
   (let [key-bytes (byte-fill (count d) b)]

@@ -4,10 +4,13 @@
             [clojure.spec :as s]
             [clojure.spec.test :as stest]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [taoensso.tufte :as tufte :refer (defnp p profiled profile)])
+  (:import [javax.crypto Cipher]
+           [javax.crypto.spec SecretKeySpec]))
 
 ;; Set 1, challenge 1
-(= "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t" (base64-encode (hex->data "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d")))
+(= "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t" (app.util/base64-encode (hex->data "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d")))
 
 ;; Set 1, challenge 2
 (let [d1 (hex->data "1c0111001f010100061a024b53535009181c")
@@ -40,42 +43,34 @@
 (= (hex-encode (repeating-xor-str "ICE" ice-ice-baby)) "0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f")
 
 ;; Set 1, challenge 6
+(tufte/add-basic-println-handler! {})
+
 (= 37 (apply hamming (map string->data ["this is a test" "wokka wokka!!!"])))
 
 (def input-6 (base64-decode (str/join (str/split-lines (slurp (io/file (io/resource "6.txt")))))))
 
-(defn avg-auto-hamming [d size num-blocks]
-  {:pre [(s/valid? :app.util/data d)]}
-  (mean
-   (let [block-data (take (* size num-blocks) d)
-         blocks (partition size block-data)]
-     (map normalized-hamming (drop-last blocks) (rest blocks)))))
 
 (def sorted-hamming-key-sizes
   (sort-by
    :mean
-   (for [k (range 2 41)]
-     {:size k
-      :initial (float (normalized-hamming
-                       (take k input-6)
-                       (take k (nthrest input-6 k))))
-      :mean (float (avg-auto-hamming input-6 k 4))})))
+   (hamming-key-sizes 2 41 input-6)))
 
 (def candidate-sizes (map :size (take 3 sorted-hamming-key-sizes)))
 
-(def candidate-keys
+(def input-6-candidate-keys
   (doall
    (for [ksize candidate-sizes]
      {:key-size ksize
       :most-likely-key
       (str/join
        (map char
-            (for [bitpos (range ksize)]
-              (->> bitpos
-                   (nthrest input-6)
-                   (take-nth ksize)
-                   (most-likely-xor-byte)))))})))
+            (doall (for [bitpos (range ksize)]
+                     (->> bitpos
+                          (nthrest input-6)
+                          (take-nth ksize)
+                          (most-likely-xor-byte))))))})))
 
+;; But it's the wax that the Terminator X spun
 
 ;; Set 1, challenge 7
 (def key (string->data "YELLOW SUBMARINE"))
@@ -87,3 +82,45 @@
 (println (data->string (bytes->data (.doFinal cipher (data->bytes input-7)))))
 ;; Reading the output kind of makes wonder... If Suge Knight had threatened
 ;; Vanilla Ice more, maybe we'd have been rid of him sooner
+
+
+;; Set 1, challenge 8
+;; (tufte/add-basic-println-handler! {})
+(def aes-block-size 16)
+(def input-8
+  (mapv hex-decode
+        (str/split-lines (slurp (io/file (io/resource "8.txt"))))))
+
+;; Looking for dupes works because the odds of two random blocks
+;; of 16 bytes equaling each other is astronomically low
+(def dupe-block-count
+  (for [cipher-text input-8]
+    (let [blocks (partition aes-block-size cipher-text)]
+      (->> blocks
+           (frequencies)
+           (filter #(< 1 (second %)))
+           (count)))))
+
+(def probably-encrypted (input-8 (.indexOf dupe-block-count (apply max dupe-block-count))))
+
+;; Unfortunately, breaking it was quite a bit harder...didn't happen
+;; based on most likely xor bytes
+
+;; (def sorted-hamming-key-sizes
+;;   (sort-by
+;;    :mean
+;;    (hamming-key-sizes 2 41 probably-encrypted)))
+
+;; ;; (def probable-key-sizes (map :size (take 3 sorted-hamming-key-sizes)))
+;; (def probable-key-sizes [1])
+;; (def probable-keys (candidate-keys probable-key-sizes probably-encrypted))
+
+;; (def cipher (Cipher/getInstance "AES/ECB/NoPadding"))
+;; (def possible-decryptions
+;;   (doall
+;;    (for [key probable-keys]
+;;      (do
+;;        #_(println (data->bytes (string->data (:most-likely-key key))))
+;;        (.init cipher Cipher/DECRYPT_MODE (SecretKeySpec. (data->bytes (string->data (:most-likely-key key))) "AES"))
+;;        (data->string (bytes->data (.doFinal cipher (data->bytes probably-encrypted)))))
+;;      )))

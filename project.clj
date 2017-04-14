@@ -4,4 +4,6 @@
 
   :dependencies [[org.clojure/clojure "1.9.0-alpha15"]
                  [commons-codec "1.10"]
-                 [medley "0.8.4"]])
+                 [com.taoensso/tufte "1.1.1"]
+                 [medley "0.8.4"]]
+  :profiles {:dev {:dependencies [[org.clojure/test.check "0.9.0"]]}})
