@@ -1,6 +1,7 @@
 (ns app.set1
   (:require [app.core :refer :all]
             [app.util :refer :all]
+            [app.cipher :refer :all]
             [clojure.spec :as s]
             [clojure.spec.test :as stest]
             [clojure.java.io :as io]
@@ -73,13 +74,10 @@
 ;; But it's the wax that the Terminator X spun
 
 ;; Set 1, challenge 7
-(def key (string->data "YELLOW SUBMARINE"))
+(def key-7 (string->data "YELLOW SUBMARINE"))
 (def input-7 (base64-decode (str/join (str/split-lines (slurp (io/file (io/resource "7.txt")))))))
 
-(def cipher (Cipher/getInstance "AES/ECB/NoPadding"))
-(.init cipher Cipher/DECRYPT_MODE (SecretKeySpec. (data->bytes key) "AES"))
-
-(println (data->string (bytes->data (.doFinal cipher (data->bytes input-7)))))
+(println (data->string (ecb-decrypt key-7 input-7)))
 ;; Reading the output kind of makes wonder... If Suge Knight had threatened
 ;; Vanilla Ice more, maybe we'd have been rid of him sooner
 

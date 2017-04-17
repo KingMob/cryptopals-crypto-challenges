@@ -64,7 +64,7 @@
    +
    0
    (map #(Long/bitCount %)
-        (map bit-xor d1 d2))))
+         (map bit-xor d1 d2))))
 
 (s/fdef hamming
         :args (s/and (s/cat :d1 :app.util/data :d2 :app.util/data)
