@@ -23,4 +23,24 @@
 
 (println (data->string (cbc-decrypt key-10 iv-10 input-10)))
 ;; "Go white boy, go white boy, go."
-;; Man, decrypting these lyrics is a real counter-incentive :)
+;; Man, decrypting these lyrics is a real counter-incentive to continuing :)
+
+
+;;; Set 2, challenge 11
+;;; It doesn't say anything about input restrictions, so I'm assuming a chosen
+;;; plaintext attack is ok here. Basically, we feed it a huge amount of identical data,
+;;; which will bin the ECB output into a small set of possibilities. The CBC output
+;;; will be much more randomly distributed, since there's no repetition in the ciphertext
+
+(def p<05-threshold 293.24784) ; See http://www.di-mgt.com.au/chisquare-calculator.html w/ 255 df
+(defn predicted-oracle-cipher-mode []
+  (let [num-bytes 1000
+        chosen-plain-data (repeat num-bytes (unchecked-byte 0))
+        cipher-data (encryption-oracle chosen-plain-data)
+        chi2-info (chi2-uniform-results 256 (frequencies (:cipher-data cipher-data)))
+        X2 (:chi2 chi2-info)]
+    (str "Guessed "
+         (if (> X2 p<05-threshold)
+                      :ecb
+                      :cbc)
+         " - Actual " (:mode cipher-data))))

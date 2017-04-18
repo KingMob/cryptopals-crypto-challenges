@@ -1,5 +1,6 @@
 (ns app.core
   (:require [app.util :refer :all]
+            [app.cipher :refer :all]
             [clojure.spec :as s]
             [clojure.string :as str :refer [upper-case lower-case]]
             [medley.core :refer [filter-keys map-vals map-keys]]
@@ -7,6 +8,7 @@
 
 (s/def ::probability (s/and number? #(<= 0 %) #(<= % 1)))
 (s/def ::hist (s/map-of char? number?))
+(s/def ::uniform-hist (s/map-of number? number?))
 (s/def ::letter-hist (s/map-of char? ::probability))
 
 (defn normalized-frequencies
@@ -31,23 +33,33 @@
 
 (defn chi2 [hist]
   {:pre [(s/valid? ::hist hist)]}
-  (let [num-total-chars (p :num-total-chars (reduce-kv (fn [total k v] (+ total v)) 0 hist))]
+  (let [total (reduce + (vals hist))]
     (reduce-kv
-     (fn [X2 k v] (+ X2 (chi2-for-letter k v num-total-chars)))
+     (fn [X2 k v] (+ X2 (chi2-for-letter k v total)))
      0
      hist)))
+
+(defn chi2-uniform-results [n hist]
+  {:pre [(s/valid? ::uniform-hist hist)]}
+  (let [total (reduce + (vals hist))
+        exp (double (/ total n))]                ; expected count
+    {
+     :chi2 (reduce
+            (fn [X2 v] (+ X2 (/ (* (- v exp) (- v exp)) exp)))
+            0
+            (vals hist))
+     :df (dec n)}))
 
 (defn chi2-results [bytes-to-xor cipher-data]
   {:pre [(s/valid? :app.util/data bytes-to-xor)
          (s/valid? :app.util/data cipher-data)]}
-  (p :chi2-results
-     (doall (for [c bytes-to-xor]
-              (let [res (p :xor-w-byte-fill (xor-with-byte-fill cipher-data c))
-                    res-string (p :data->string (data->string res))
-                    hist (p :frequencies (frequencies (str/lower-case res-string)))]
-                {:xor-result res-string
-                 :chi2 (p :chi2 (chi2 hist))
-                 :char c})))))
+  (doall (for [c bytes-to-xor]
+           (let [res (p :xor-w-byte-fill (xor-with-byte-fill cipher-data c))
+                 res-string (data->string res)
+                 hist (frequencies (str/lower-case res-string))]
+             {:xor-result res-string
+              :chi2 (chi2 hist)
+              :char c}))))
 
 (def xor-search-bytes (concat (range 32 127) (range 0 31) (range 128 255))) ; Starts with printable chars
 
@@ -110,3 +122,20 @@
                           (nthrest input)
                           (take-nth ksize)
                           (most-likely-xor-byte))))))})))
+
+(defn rand-bytes [n]
+  (vec (take n (repeatedly #(unchecked-byte (rand-int 256))))))
+
+(defn rand-aes-block []
+  (rand-bytes aes-block-size))
+
+(defn encryption-oracle [d]
+  {:pre [(s/valid? :app.util/data d)]}
+  (let [k (rand-aes-block)
+        iv (rand-aes-block)
+        pre-padding (rand-bytes (+ 5 (rand-int 6)))
+        post-padding (rand-bytes (+ 5 (rand-int 6)))
+        plain-data (into [] cat [pre-padding d post-padding])]
+    (if (zero? (rand-int 2))
+      {:mode :ecb :cipher-data (ecb-encrypt k plain-data)}
+      {:mode :cbc :cipher-data (cbc-encrypt k iv plain-data)})))

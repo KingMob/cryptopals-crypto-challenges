@@ -1,6 +1,5 @@
 (ns app.cipher
-  (:require [app.core :refer :all]
-            [app.util :refer :all]
+  (:require [app.util :refer :all]
             [clojure.spec :as s]
             [clojure.spec.test :as stest]
             [clojure.string :as str]
@@ -9,9 +8,9 @@
   (:import [javax.crypto Cipher]
            [javax.crypto.spec SecretKeySpec]))
 
-(def ^:private aes-block-size 16)
+(def aes-block-size 16)
 
-q(defn pkcs7-pad [blocksize d]
+(defn pkcs7-pad [blocksize d]
   {:pre [(s/valid? :app.util/data d) (s/valid? pos-int? blocksize)]}
   (let [bytes-in-last-block (mod (count d) blocksize)
         num-bytes-to-add (- blocksize bytes-in-last-block)]
@@ -52,11 +51,12 @@ q(defn pkcs7-pad [blocksize d]
   (let [blocks (partition aes-block-size (pkcs7-pad aes-block-size d))
         d1 (into [iv] conj (butlast blocks))
         d2 blocks]
-    (pkcs7-unpad aes-block-size
-                 (vec
-                  (mapcat #(xor %1 (ecb-decrypt k %2))
-                          d1
-                          d2)))))
+    (pkcs7-unpad
+     aes-block-size
+     (vec (mapcat
+           #(xor %1 (ecb-decrypt k %2))
+           d1
+           d2)))))
 
 (defn cbc-encrypt [k iv d]
   (let [blocks (partition aes-block-size (pkcs7-pad aes-block-size d))]
