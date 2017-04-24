@@ -14,6 +14,7 @@
 (s/def ::hex-string (s/and string? (comp even? count) ::hex-digits))
 (s/def ::byte-array bytes?)
 (s/def ::data (s/coll-of integer? :into []))
+(s/def ::data-w-nils (s/coll-of #(or (integer? %) (nil? %))))
 
 
 (defn hex-char->number [^Character h]

@@ -39,16 +39,19 @@
      0
      hist)))
 
-(defn chi2-uniform-results [n hist]
+(def num-possible-bytes 256)
+(defn chi2-uniform-byte-results [hist]
   {:pre [(s/valid? ::uniform-hist hist)]}
   (let [total (reduce + (vals hist))
-        exp (double (/ total n))]                ; expected count
+        exp (double (/ total num-possible-bytes))]                ; expected count
     {
      :chi2 (reduce
-            (fn [X2 v] (+ X2 (/ (* (- v exp) (- v exp)) exp)))
+            (fn [X2 b]
+              (let [v (hist b 0)]
+                (+ X2 (/ (* (- v exp) (- v exp)) exp))))
             0
-            (vals hist))
-     :df (dec n)}))
+            (map unchecked-byte (range num-possible-bytes)))
+     :df (dec num-possible-bytes)}))
 
 (defn chi2-results [bytes-to-xor cipher-data]
   {:pre [(s/valid? :app.util/data bytes-to-xor)
@@ -110,6 +113,14 @@
                    k
                    (min default-mean-num-hamming-blocks (/ (count input) k))))}))
 
+(defn sorted-hamming-key-sizes
+  ([kmin kmax input]
+   (sorted-hamming-key-sizes kmin kmax input :mean))
+  ([kmin kmax input metric]
+   (sort-by
+    metric
+    (hamming-key-sizes kmin kmax input))))
+
 (defn candidate-keys [ksizes input]
   (vec
    (for [ksize ksizes]
@@ -123,8 +134,27 @@
                           (take-nth ksize)
                           (most-likely-xor-byte))))))})))
 
+(defn dupe-block-counts
+  ([cipher-data] (dupe-block-counts cipher-data 2 16))
+  ([cipher-data bsize] (dupe-block-counts cipher-data bsize bsize))
+  ([cipher-data bmin bmax]
+   (for [bsize (range bmin (inc bmax))]
+     [bsize (transduce (map dec) + (vals
+                                    (frequencies (partition bsize cipher-data))))])))
+
+(defn num-dupe-blocks
+  [cipher-data bsize]
+  ((first (dupe-block-counts cipher-data bsize)) 1))
+
+(defn block-size-w-most-dupes
+ [cipher-data]
+ (->> cipher-data
+      (dupe-block-counts)
+      (apply max-key second)
+      (first)))
+
 (defn rand-bytes [n]
-  (vec (take n (repeatedly #(unchecked-byte (rand-int 256))))))
+  (vec (repeatedly n #(unchecked-byte (rand-int 256)))))
 
 (defn rand-aes-block []
   (rand-bytes aes-block-size))
@@ -139,3 +169,49 @@
     (if (zero? (rand-int 2))
       {:mode :ecb :cipher-data (ecb-encrypt k plain-data)}
       {:mode :cbc :cipher-data (cbc-encrypt k iv plain-data)})))
+
+(def ^:private all-bytes (vec (map unchecked-byte (range 256))))
+(defn last-byte-map
+  [input-block enc-oracle-fn bsize]
+  (into {}
+        (for [b all-bytes]
+          (let [d (vec (:cipher-data
+                        (enc-oracle-fn
+                         (into [] cat [input-block [b]]))))]
+            [(subvec d 0 bsize) b]))))
+
+(defn decrypt-byte [pad-bytes decrypted-bytes enc-oracle-fn range-min range-max]
+  {:pre [(s/valid? :app.util/data pad-bytes)
+         (s/valid? :app.util/data-w-nils decrypted-bytes)
+         (s/valid? nat-int? range-min)
+         (s/valid? nat-int? range-max)
+         (> range-max range-min)]}
+  (let [input-block (concat pad-bytes decrypted-bytes)
+        bmap (last-byte-map input-block enc-oracle-fn (- (inc range-max) range-min))
+        cipher-data (:cipher-data (enc-oracle-fn pad-bytes))]
+    (bmap (subvec cipher-data range-min (inc range-max)))))
+
+(defn decrypt-block [enc-oracle-fn initial-input-block [range-min range-max]]
+  (let [bsize (- (inc range-max) range-min)]
+    (loop [input-block initial-input-block
+           block-plain-data []]
+      (let [next-byte (decrypt-byte input-block block-plain-data enc-oracle-fn range-min range-max)
+            block-plain-data (conj block-plain-data next-byte)]
+        (if (and next-byte (seq input-block))
+          (recur (rest input-block) #_(conj block-plain-data next-byte) block-plain-data)
+          (filter some? block-plain-data))))))
+
+(defn decrypt-secret [enc-oracle-fn]
+  (let [bsize aes-block-size
+        initial-padding (vec (repeat bsize (byte 0)))
+        cipher-data (:cipher-data (enc-oracle-fn []))
+        secret-length (count cipher-data)
+        num-blocks (int (Math/ceil (/ secret-length bsize)))
+        block-ranges (for [i (range num-blocks)] [(* i bsize) (dec (* (inc i) bsize))])]
+    (drop (count initial-padding)
+          (reduce (fn [decrypted-bytes block-range]
+                    (apply conj decrypted-bytes
+                           (decrypt-block enc-oracle-fn (take-last (dec bsize) decrypted-bytes) block-range)))
+                  initial-padding
+                  block-ranges
+                  ))))

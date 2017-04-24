@@ -14,7 +14,7 @@
   {:pre [(s/valid? :app.util/data d) (s/valid? pos-int? blocksize)]}
   (let [bytes-in-last-block (mod (count d) blocksize)
         num-bytes-to-add (- blocksize bytes-in-last-block)]
-    (if (> bytes-in-last-block 0)
+    (if (pos? bytes-in-last-block)
       (into d (repeat num-bytes-to-add (unchecked-byte num-bytes-to-add)))
       d)))
 

@@ -50,13 +50,7 @@
 
 (def input-6 (base64-decode (str/join (str/split-lines (slurp (io/file (io/resource "6.txt")))))))
 
-
-(def sorted-hamming-key-sizes
-  (sort-by
-   :mean
-   (hamming-key-sizes 2 41 input-6)))
-
-(def candidate-sizes (map :size (take 3 sorted-hamming-key-sizes)))
+(def candidate-sizes (map :size (take 3 (sorted-hamming-key-sizes 2 41 input-6))))
 
 (def input-6-candidate-keys
   (doall
@@ -91,7 +85,7 @@
 
 ;; Looking for dupes works because the odds of two random blocks
 ;; of 16 bytes equaling each other is astronomically low
-(def dupe-block-count
+(def dupe-block-counts
   (for [cipher-text input-8]
     (let [blocks (partition aes-block-size cipher-text)]
       (->> blocks
@@ -99,7 +93,7 @@
            (filter #(< 1 (second %)))
            (count)))))
 
-(def probably-encrypted (input-8 (.indexOf dupe-block-count (apply max dupe-block-count))))
+(def probably-encrypted (input-8 (.indexOf dupe-block-counts (apply max dupe-block-counts))))
 
 ;; Unfortunately, breaking it was quite a bit harder...didn't happen
 ;; based on most likely xor bytes
