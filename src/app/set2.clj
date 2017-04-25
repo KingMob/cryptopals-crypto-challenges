@@ -66,15 +66,16 @@
   "Might be challenge 12-specific"
   {:pre [(s/valid? :app.util/data d)]}
   (let [plain-data (into [] cat [d (base64-decode secret-string-12)])]
-    {:mode :ecb :cipher-data (ecb-encrypt random-key-12 plain-data)}))
+    #_{:mode :ecb :cipher-data (ecb-encrypt random-key-12 plain-data)}
+    (ecb-encrypt random-key-12 plain-data)))
 
 (defn decrypt-byte-at-a-time-ecb-simple []
   (let [test-data (byte-at-a-time-oracle (vec (repeat 1000 0)))
         bsize (block-size-w-most-dupes test-data)
         ; chi2-info (chi2-uniform-byte-results (frequencies (:cipher-data test-data)))
         ; X2 (:chi2 chi2-info)
-        initial-plain-data (repeat (dec bsize) (byte \A))
-        cipher-data (byte-at-a-time-oracle chosen-plain-data)
+        ;initial-plain-data (repeat (dec bsize) (byte \A))
+        ;cipher-data (byte-at-a-time-oracle chosen-plain-data)
         ]
     (println "Cipher's block size:" bsize)
     #_(println "Guessed"
@@ -93,10 +94,15 @@
     "uid" 10
     "role" "user"}))
 
-(def random-key-13 (rand-aes-block))
+(def random-key-13 (rand-bytes aes-block-size))
 (defn encrypted-profile [email]
   (ecb-encrypt random-key-13 (string->data (profile-for email))))
 
 (defn decrypted-profile [d]
   {:pre [(s/valid? :app.util/data d)]}
-  (ecb-decrypt random-key-13 d))
+  (url-decode (data->string (ecb-decrypt random-key-13 d))))
+
+(def initial-blocks (into [] cat (butlast (partition-all aes-block-size (encrypted-profile "vanil@ice.com"))))) ; Generates the blocks, splitting after "role="
+(def sneaky-email (str "AAAAAAAAAAadmin" (str/join (repeat 11 (char 11))))) ; Generates a block with just "admin" followed by pkcs7 padding
+(def admin-padded-block (vec (second (partition-all aes-block-size (encrypted-profile sneaky-email))))) ; extracts that "admin"-only block
+(decrypted-profile (apply conj initial-blocks admin-padded-block))

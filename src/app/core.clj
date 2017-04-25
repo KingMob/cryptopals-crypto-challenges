@@ -175,9 +175,9 @@
   [input-block enc-oracle-fn bsize]
   (into {}
         (for [b all-bytes]
-          (let [d (vec (:cipher-data
-                        (enc-oracle-fn
-                         (into [] cat [input-block [b]]))))]
+          (let [d (vec
+                   (enc-oracle-fn
+                    (into [] cat [input-block [b]])))]
             [(subvec d 0 bsize) b]))))
 
 (defn decrypt-byte [pad-bytes decrypted-bytes enc-oracle-fn range-min range-max]
@@ -188,7 +188,8 @@
          (> range-max range-min)]}
   (let [input-block (concat pad-bytes decrypted-bytes)
         bmap (last-byte-map input-block enc-oracle-fn (- (inc range-max) range-min))
-        cipher-data (:cipher-data (enc-oracle-fn pad-bytes))]
+        #_cipher-data #_(:cipher-data (enc-oracle-fn pad-bytes))
+        cipher-data (enc-oracle-fn pad-bytes)]
     (bmap (subvec cipher-data range-min (inc range-max)))))
 
 (defn decrypt-block [enc-oracle-fn initial-input-block [range-min range-max]]
@@ -198,16 +199,19 @@
       (let [next-byte (decrypt-byte input-block block-plain-data enc-oracle-fn range-min range-max)
             block-plain-data (conj block-plain-data next-byte)]
         (if (and next-byte (seq input-block))
-          (recur (rest input-block) #_(conj block-plain-data next-byte) block-plain-data)
+          (recur (rest input-block) block-plain-data)
           (filter some? block-plain-data))))))
 
 (defn decrypt-secret [enc-oracle-fn]
   (let [bsize aes-block-size
         initial-padding (vec (repeat bsize (byte 0)))
-        cipher-data (:cipher-data (enc-oracle-fn []))
+        ;cipher-data (:cipher-data (enc-oracle-fn []))
+        cipher-data (enc-oracle-fn [])
         secret-length (count cipher-data)
-        num-blocks (int (Math/ceil (/ secret-length bsize)))
+        num-blocks (int (Math/ceil (/ secret-length
+                                      bsize)))
         block-ranges (for [i (range num-blocks)] [(* i bsize) (dec (* (inc i) bsize))])]
+    #_(println cipher-data)
     (drop (count initial-padding)
           (reduce (fn [decrypted-bytes block-range]
                     (apply conj decrypted-bytes
