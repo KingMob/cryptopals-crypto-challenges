@@ -97,3 +97,16 @@
 
 (defn mean [coll]
   (/ (reduce + 0 coll) (count coll)))
+
+(defn url-decode [s]
+  {:pre [(s/valid? string? s)]}
+  (->> (str/split s #"&")
+       (map #(str/split % #"="))
+       (into {})))
+
+(defn url-encode [m]
+  {:pre [(s/valid? map? m)]}
+  (->> m
+       (reduce-kv (fn [coll k v]
+                    (conj coll (str k "=" v))) [])
+       (str/join "&")))

@@ -85,3 +85,18 @@
     (println (data->string (decrypt-secret byte-at-a-time-oracle)))))
 
 ;;; Kept on pursuing to the next stop
+
+;;; Set 2, challenge 13
+(defn profile-for [email]
+  (url-encode
+   {"email" (str/replace email #"[=&]" "")
+    "uid" 10
+    "role" "user"}))
+
+(def random-key-13 (rand-aes-block))
+(defn encrypted-profile [email]
+  (ecb-encrypt random-key-13 (string->data (profile-for email))))
+
+(defn decrypted-profile [d]
+  {:pre [(s/valid? :app.util/data d)]}
+  (ecb-decrypt random-key-13 d))
