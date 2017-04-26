@@ -62,28 +62,27 @@
 (def secret-string-12 "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK")
 
 
-(defn byte-at-a-time-oracle [d]
-  "Might be challenge 12-specific"
+(defn byte-at-a-time-oracle-12 [d]
   {:pre [(s/valid? :app.util/data d)]}
   (let [plain-data (into [] cat [d (base64-decode secret-string-12)])]
     #_{:mode :ecb :cipher-data (ecb-encrypt random-key-12 plain-data)}
     (ecb-encrypt random-key-12 plain-data)))
 
 (defn decrypt-byte-at-a-time-ecb-simple []
-  (let [test-data (byte-at-a-time-oracle (vec (repeat 1000 0)))
+  (let [test-data (byte-at-a-time-oracle-12 (vec (repeat 1000 0)))
         bsize (block-size-w-most-dupes test-data)
         ; chi2-info (chi2-uniform-byte-results (frequencies (:cipher-data test-data)))
         ; X2 (:chi2 chi2-info)
         ;initial-plain-data (repeat (dec bsize) (byte \A))
         ;cipher-data (byte-at-a-time-oracle chosen-plain-data)
         ]
-    (println "Cipher's block size:" bsize)
+    #_(println "Cipher's block size:" bsize)
     #_(println "Guessed"
              (if (> X2 X2-threshold)
                :ecb
                :cbc)
              "- Actual" (:mode cipher-data))
-    (println (data->string (decrypt-secret byte-at-a-time-oracle)))))
+    (println (data->string (decrypt-secret byte-at-a-time-oracle-12)))))
 
 ;;; Kept on pursuing to the next stop
 
@@ -106,3 +105,21 @@
 (def sneaky-email (str "AAAAAAAAAAadmin" (str/join (repeat 11 (char 11))))) ; Generates a block with just "admin" followed by pkcs7 padding
 (def admin-padded-block (vec (second (partition-all aes-block-size (encrypted-profile sneaky-email))))) ; extracts that "admin"-only block
 (decrypted-profile (apply conj initial-blocks admin-padded-block))
+
+
+;;; Set 2, challenge 14
+
+(def random-key-14 (rand-bytes aes-block-size))
+(def random-prefix-14 (rand-bytes (rand-int 20)))
+(def secret-string-14 "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK")
+
+
+(defn byte-at-a-time-oracle-14 [d]
+  {:pre [(s/valid? :app.util/data d)]}
+  (let [plain-data (into [] cat [random-prefix-14 d (base64-decode secret-string-14)])]
+    #_{:mode :ecb :cipher-data (ecb-encrypt random-key-14 plain-data)}
+    (ecb-encrypt random-key-14 plain-data)))
+
+(defn decrypt-byte-at-a-time-ecb-harder []
+  (let [test-data [(byte 0)]])
+  (println (data->string (decrypt-secret byte-at-a-time-oracle-14))))

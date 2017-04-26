@@ -202,20 +202,77 @@
           (recur (rest input-block) block-plain-data)
           (filter some? block-plain-data))))))
 
+(defn- oracle-padding-prefix-length [enc-oracle-fn]
+  (let [bs (range aes-block-size)
+        pairs (vec (partition 2 1 bs))
+        initial-pair (first pairs)]
+    (loop [prefix-length (common-prefix-length
+                          (enc-oracle-fn (repeat (first initial-pair) (byte 0)))
+                          (enc-oracle-fn (repeat (second initial-pair) (byte 0))))
+           pairs (rest pairs)]
+      (if pairs
+        (let [curr-pair (first pairs)
+              b1 (first curr-pair)
+              b2 (second curr-pair)]
+          (if (not=
+               prefix-length
+               (common-prefix-length
+                (enc-oracle-fn (repeat b1 (byte 0)))
+                (enc-oracle-fn (repeat b2 (byte 0)))))
+            b1
+            (recur prefix-length (next pairs))))
+        0))))
+
 (defn decrypt-secret [enc-oracle-fn]
   (let [bsize aes-block-size
-        initial-padding (vec (repeat bsize (byte 0)))
-        ;cipher-data (:cipher-data (enc-oracle-fn []))
         cipher-data (enc-oracle-fn [])
-        secret-length (count cipher-data)
+        prefix-length (common-prefix-length cipher-data (enc-oracle-fn [0]))
+        padding-prefix-length (oracle-padding-prefix-length enc-oracle-fn)
+        total-offset (int (* aes-block-size
+                             (Math/ceil (/ (+ prefix-length padding-prefix-length) aes-block-size))))
+        initial-padding (vec (repeat (+ padding-prefix-length bsize) (byte 0)))
+        secret-length (- (count cipher-data) total-offset)
         num-blocks (int (Math/ceil (/ secret-length
                                       bsize)))
-        block-ranges (for [i (range num-blocks)] [(* i bsize) (dec (* (inc i) bsize))])]
-    #_(println cipher-data)
+
+        block-ranges (for [i (range num-blocks)]
+                       [(+ total-offset (* i bsize))
+                        (+ total-offset (dec (* (inc i) bsize)))])]
+    (println prefix-length padding-prefix-length)
+    (println block-ranges)
+    (println (count cipher-data))
+    (println (count initial-padding))
     (drop (count initial-padding)
           (reduce (fn [decrypted-bytes block-range]
                     (apply conj decrypted-bytes
-                           (decrypt-block enc-oracle-fn (take-last (dec bsize) decrypted-bytes) block-range)))
+                           (decrypt-block
+                            enc-oracle-fn
+                            (take-last (dec bsize) decrypted-bytes) block-range)))
                   initial-padding
                   block-ranges
+                  ))))
+
+#_(defn decrypt-secret-w-prefix [enc-oracle-fn]
+  (let [bsize aes-block-size
+        ;initial-padding (vec (repeat bsize (byte 0)))
+        initial-padding (vec (repeat 12 (byte 0)))
+        cipher-data (enc-oracle-fn [])
+        test-data (enc-oracle-fn [(byte 0)])
+        prefix-length (common-prefix-length cipher-data test-data)
+        num-prefix-blocks (/ prefix-length bsize)
+        secret-length (count cipher-data)
+        num-blocks (int (Math/ceil (/ secret-length
+                                      bsize)))
+        block-ranges (for [i (range num-blocks)]
+                       [(* i bsize) (dec (* (inc i) bsize))])]
+    #_(println num-prefix-blocks)
+    #_(println (nthrest block-ranges num-prefix-blocks))
+    (drop (count initial-padding)
+          (reduce (fn [decrypted-bytes block-range]
+                    (apply conj decrypted-bytes
+                           (decrypt-block
+                            enc-oracle-fn
+                            (take-last (dec bsize) decrypted-bytes) block-range)))
+                  initial-padding
+                  (nthrest block-ranges num-prefix-blocks)
                   ))))

@@ -5,6 +5,7 @@
             [clojure.spec.gen :as gen]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            [medley.core :refer [interleave-all]]
             [taoensso.tufte :as tufte :refer [defnp p profiled profile]])
   (:import [org.apache.commons.codec.binary Base64 Hex]))
 
@@ -110,3 +111,24 @@
        (reduce-kv (fn [coll k v]
                     (conj coll (str k "=" v))) [])
        (str/join "&")))
+
+(defn common-prefix-length [d1 d2]
+  (let [pairs (partition 2 (interleave d1 d2))
+        min-size (count pairs)
+        identical-pairs (take-while (fn [[a b]]
+                                      (= a b))
+                                    pairs)]
+    (count identical-pairs)))
+
+(defn remove-common-prefix [[d1 d2 :as ds]]
+  {:pre [(s/valid? (s/coll-of sequential? :count 2) ds)]}
+  (let [pairs (partition 2 (interleave d1 d2))
+        min-size (count pairs)
+        divergent-pairs (drop-while (fn [[a b]]
+                                      (= a b))
+                                    pairs)
+        d1-unique (apply conj
+                         (into [] (map first) divergent-pairs) (nthrest d1 min-size))
+        d2-unique (apply conj
+                         (into [] (map second) divergent-pairs) (nthrest d2 min-size))]
+    [d1-unique d2-unique]))
