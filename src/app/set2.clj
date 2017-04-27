@@ -121,3 +121,25 @@
 (defn decrypt-byte-at-a-time-ecb-harder []
   (let [test-data [(byte 0)]])
   (println (data->string (decrypt-secret byte-at-a-time-oracle-14))))
+
+
+;;; Set 2, challenge 15
+(defn pkcs-unpad-ex [blocksize d]
+  {:pre [(s/valid? :app.util/data d) (s/valid? pos-int? blocksize)]}
+  (let [last-byte (last d)]
+    (if (and (pos? last-byte) (< last-byte blocksize))
+      (let [possible-pad (subvec d (- (count d) last-byte) (count d))]
+        (if (every? #(= last-byte %) possible-pad)
+          (subvec d 0 (- (count d) last-byte))
+          (throw (ex-info "Invalid PKCS padding" {:bytes (take-last blocksize d)}))))
+      d)))
+
+(try
+  (pkcs-unpad-ex aes-block-size (repeat 16 (byte 10)))
+  (catch Exception e
+    "Found correct exception"))
+
+(try
+  (pkcs-unpad-ex aes-block-size (into [] cat [(repeat 12 (byte 10)) (repeat 4 (byte 4))]))
+  (catch Exception e
+    "Found incorrect exception"))
