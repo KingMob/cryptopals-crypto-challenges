@@ -65,7 +65,6 @@
 (defn byte-at-a-time-oracle-12 [d]
   {:pre [(s/valid? :app.util/data d)]}
   (let [plain-data (into [] cat [d (base64-decode secret-string-12)])]
-    #_{:mode :ecb :cipher-data (ecb-encrypt random-key-12 plain-data)}
     (ecb-encrypt random-key-12 plain-data)))
 
 (defn decrypt-byte-at-a-time-ecb-simple []
@@ -117,7 +116,6 @@
 (defn byte-at-a-time-oracle-14 [d]
   {:pre [(s/valid? :app.util/data d)]}
   (let [plain-data (into [] cat [random-prefix-14 d (base64-decode secret-string-14)])]
-    #_{:mode :ecb :cipher-data (ecb-encrypt random-key-14 plain-data)}
     (ecb-encrypt random-key-14 plain-data)))
 
 (defn decrypt-byte-at-a-time-ecb-harder []

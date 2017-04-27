@@ -3,6 +3,7 @@
             [app.cipher :refer :all]
             [clojure.spec :as s]
             [clojure.string :as str :refer [upper-case lower-case]]
+            [clojure.test :refer [deftest is]]
             [medley.core :refer [filter-keys map-vals map-keys]]
             [taoensso.tufte :as tufte :refer (defnp p profiled profile)]))
 
@@ -10,6 +11,8 @@
 (s/def ::hist (s/map-of char? number?))
 (s/def ::uniform-hist (s/map-of number? number?))
 (s/def ::letter-hist (s/map-of char? ::probability))
+
+(def ^:private all-bytes (vec (map unchecked-byte (range 256))))
 
 (defn normalized-frequencies
   ([hist]
@@ -170,37 +173,53 @@
       {:mode :ecb :cipher-data (ecb-encrypt k plain-data)}
       {:mode :cbc :cipher-data (cbc-encrypt k iv plain-data)})))
 
-(def ^:private all-bytes (vec (map unchecked-byte (range 256))))
-(defn last-byte-map
-  [input-block enc-oracle-fn bsize]
+
+(defn- byte-map-entry [enc-oracle-fn input-block b offset bsize]
+  {:pre [(s/valid? :app.util/data input-block) (s/valid? nat-int? offset) (s/valid? pos? bsize)]
+   :post [(s/valid? (s/coll-of integer? :count bsize) (first %))]}
+  (let [d (vec
+           (enc-oracle-fn
+            (into [] cat [input-block [b]])))
+        mapped-block (subvec d (+ 0 offset) (+ bsize offset))]
+    [mapped-block b]))
+
+(defn last-byte-map [input-block enc-oracle-fn bsize offset]
+  {:post [(s/valid? (s/map-of (s/coll-of integer?) integer? :count 256) %)]}
   (into {}
         (for [b all-bytes]
-          (let [d (vec
-                   (enc-oracle-fn
-                    (into [] cat [input-block [b]])))]
-            [(subvec d 0 bsize) b]))))
+          (byte-map-entry enc-oracle-fn input-block b offset bsize))))
 
-(defn decrypt-byte [pad-bytes decrypted-bytes enc-oracle-fn range-min range-max]
+(defn decrypt-byte [bsize total-offset pad-bytes decrypted-bytes enc-oracle-fn range-min range-max]
   {:pre [(s/valid? :app.util/data pad-bytes)
          (s/valid? :app.util/data-w-nils decrypted-bytes)
          (s/valid? nat-int? range-min)
          (s/valid? nat-int? range-max)
          (> range-max range-min)]}
   (let [input-block (concat pad-bytes decrypted-bytes)
-        bmap (last-byte-map input-block enc-oracle-fn (- (inc range-max) range-min))
-        #_cipher-data #_(:cipher-data (enc-oracle-fn pad-bytes))
-        cipher-data (enc-oracle-fn pad-bytes)]
-    (bmap (subvec cipher-data range-min (inc range-max)))))
+        bmap (last-byte-map input-block enc-oracle-fn bsize total-offset)
+        cipher-data (enc-oracle-fn pad-bytes)
+        mapped-block (subvec cipher-data range-min (inc range-max))]
+    (bmap mapped-block)))
 
-(defn decrypt-block [enc-oracle-fn initial-input-block [range-min range-max]]
-  (let [bsize (- (inc range-max) range-min)]
-    (loop [input-block initial-input-block
-           block-plain-data []]
-      (let [next-byte (decrypt-byte input-block block-plain-data enc-oracle-fn range-min range-max)
-            block-plain-data (conj block-plain-data next-byte)]
-        (if (and next-byte (seq input-block))
-          (recur (rest input-block) block-plain-data)
-          (filter some? block-plain-data))))))
+(defn decrypt-block [enc-oracle-fn bsize total-offset padding-prefix initial-input-block [range-min range-max]]
+  {:pre [(s/valid? (s/coll-of integer? :count (dec bsize)) initial-input-block)
+         (s/valid? #(= 0 (mod % bsize)) total-offset)]}
+  (loop [input-length (count initial-input-block)
+         input-block (into [] cat [padding-prefix initial-input-block])
+         decrypted-bytes []]
+    (if-let [next-byte (decrypt-byte
+                        bsize
+                        total-offset
+                        input-block
+                        decrypted-bytes
+                        enc-oracle-fn
+                        range-min
+                        range-max)]
+      (let [decrypted-bytes (conj decrypted-bytes next-byte)]
+        (if (pos-int? input-length)
+          (recur (dec input-length) (rest input-block) decrypted-bytes)
+          decrypted-bytes))
+      decrypted-bytes)))
 
 (defn- oracle-padding-prefix-length [enc-oracle-fn]
   (let [bs (range aes-block-size)
@@ -223,56 +242,46 @@
             (recur prefix-length (next pairs))))
         0))))
 
+(deftest oracle-padding-prefix-test
+  (let [prefix-length 19
+        padding-prefix-length (- (* aes-block-size (int (Math/ceil (/ prefix-length aes-block-size)))) prefix-length)
+        prefix (rand-bytes prefix-length)
+        postfix (rand-bytes (rand-int 30))
+        k (rand-bytes aes-block-size)
+        oraclefn (fn [d]
+                   (let [plain-data (into [] cat [prefix d postfix])]
+                     (println plain-data)
+                     (ecb-encrypt k plain-data)))]
+    (is (= padding-prefix-length (oracle-padding-prefix-length oraclefn)))))
+
 (defn decrypt-secret [enc-oracle-fn]
   (let [bsize aes-block-size
         cipher-data (enc-oracle-fn [])
-        prefix-length (common-prefix-length cipher-data (enc-oracle-fn [0]))
+        shared-prefix-length (common-prefix-length cipher-data (enc-oracle-fn [0]))
         padding-prefix-length (oracle-padding-prefix-length enc-oracle-fn)
         total-offset (int (* aes-block-size
-                             (Math/ceil (/ (+ prefix-length padding-prefix-length) aes-block-size))))
-        initial-padding (vec (repeat (+ padding-prefix-length bsize) (byte 0)))
-        secret-length (- (count cipher-data) total-offset)
+                             (Math/ceil (/ (+ shared-prefix-length padding-prefix-length) aes-block-size))))
+        prefix-length (- total-offset padding-prefix-length)
+        initial-padding (vec (repeat bsize (byte 0)))
+        secret-length (- (count cipher-data) prefix-length)
         num-blocks (int (Math/ceil (/ secret-length
                                       bsize)))
 
         block-ranges (for [i (range num-blocks)]
                        [(+ total-offset (* i bsize))
                         (+ total-offset (dec (* (inc i) bsize)))])]
-    (println prefix-length padding-prefix-length)
-    (println block-ranges)
-    (println (count cipher-data))
-    (println (count initial-padding))
-    (drop (count initial-padding)
-          (reduce (fn [decrypted-bytes block-range]
-                    (apply conj decrypted-bytes
-                           (decrypt-block
-                            enc-oracle-fn
-                            (take-last (dec bsize) decrypted-bytes) block-range)))
-                  initial-padding
-                  block-ranges
-                  ))))
-
-#_(defn decrypt-secret-w-prefix [enc-oracle-fn]
-  (let [bsize aes-block-size
-        ;initial-padding (vec (repeat bsize (byte 0)))
-        initial-padding (vec (repeat 12 (byte 0)))
-        cipher-data (enc-oracle-fn [])
-        test-data (enc-oracle-fn [(byte 0)])
-        prefix-length (common-prefix-length cipher-data test-data)
-        num-prefix-blocks (/ prefix-length bsize)
-        secret-length (count cipher-data)
-        num-blocks (int (Math/ceil (/ secret-length
-                                      bsize)))
-        block-ranges (for [i (range num-blocks)]
-                       [(* i bsize) (dec (* (inc i) bsize))])]
-    #_(println num-prefix-blocks)
-    #_(println (nthrest block-ranges num-prefix-blocks))
-    (drop (count initial-padding)
-          (reduce (fn [decrypted-bytes block-range]
-                    (apply conj decrypted-bytes
-                           (decrypt-block
-                            enc-oracle-fn
-                            (take-last (dec bsize) decrypted-bytes) block-range)))
-                  initial-padding
-                  (nthrest block-ranges num-prefix-blocks)
-                  ))))
+    (pkcs7-unpad
+     bsize
+     (vec (drop (count initial-padding)
+                (reduce (fn [decrypted-bytes block-range]
+                          (apply conj decrypted-bytes
+                                 (decrypt-block
+                                  enc-oracle-fn
+                                  bsize
+                                  total-offset
+                                  (repeat padding-prefix-length (byte 0))
+                                  (take-last (dec bsize) decrypted-bytes)
+                                  block-range)))
+                        initial-padding
+                        block-ranges
+                        ))))))
