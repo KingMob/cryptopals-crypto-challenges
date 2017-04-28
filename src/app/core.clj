@@ -221,7 +221,7 @@
           decrypted-bytes))
       decrypted-bytes)))
 
-(defn- oracle-padding-prefix-length [enc-oracle-fn]
+(defn oracle-padding-prefix-length [enc-oracle-fn]
   (let [bs (range aes-block-size)
         pairs (vec (partition 2 1 bs))
         initial-pair (first pairs)]

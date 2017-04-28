@@ -124,15 +124,6 @@
 
 
 ;;; Set 2, challenge 15
-(defn pkcs-unpad-ex [blocksize d]
-  {:pre [(s/valid? :app.util/data d) (s/valid? pos-int? blocksize)]}
-  (let [last-byte (last d)]
-    (if (and (pos? last-byte) (< last-byte blocksize))
-      (let [possible-pad (subvec d (- (count d) last-byte) (count d))]
-        (if (every? #(= last-byte %) possible-pad)
-          (subvec d 0 (- (count d) last-byte))
-          (throw (ex-info "Invalid PKCS padding" {:bytes (take-last blocksize d)}))))
-      d)))
 
 (try
   (pkcs-unpad-ex aes-block-size (repeat 16 (byte 10)))
@@ -141,5 +132,57 @@
 
 (try
   (pkcs-unpad-ex aes-block-size (into [] cat [(repeat 12 (byte 10)) (repeat 4 (byte 4))]))
+  (println "Correctly found no exception")
   (catch Exception e
     "Found incorrect exception"))
+
+
+;;; Set 2, challenge 16
+
+(def random-key-16 (rand-bytes aes-block-size))
+(def random-iv-16 (rand-bytes aes-block-size))
+(def prefix-16 "comment1=cooking%20MCs;userdata=")
+(def postfix-16 ";comment2=%20like%20a%20pound%20of%20bacon")
+(def goal-string ";admin=true;")
+
+(defn quote-16 [s]
+  (str/escape s {\; (str "%" (int \;)) \" (str "%" (int \"))}))
+
+(defn encrypt-16 [input]
+  (let [s (data->string input)
+        s-full (str prefix-16 (quote-16 s) postfix-16)
+        d (string->data s-full)]
+    (cbc-encrypt random-key-16 random-iv-16 (pkcs7-pad aes-block-size d))))
+
+(defn decrypt-16 [cipher-data]
+  (cbc-decrypt random-key-16 random-iv-16 cipher-data))
+
+(defn is-admin? [cipher-data]
+  (let [d (decrypt-16 cipher-data)
+        s-full (data->string d)]
+    (str/includes? s-full goal-string)))
+
+; Requires some knowledge of the decrypted text, so you know what plain text to xor with
+(defn cbc-bitflip []
+  (let [prefix-length (count prefix-16)
+        goal-bytes (string->data goal-string)
+        goal-length (count goal-bytes)
+        input (repeat goal-length (int 0))
+        cipher-data (encrypt-16 input)
+        goal-xor (xor goal-bytes input)
+        goal-offset (- prefix-length aes-block-size)
+        goal-cipher-data (into [] cat [(take goal-offset cipher-data)
+                                       goal-xor
+                                       (drop (+ goal-offset goal-length) cipher-data)])]
+    (println "Input bytes")
+    (pretty-print input)
+    (println "Goal bytes")
+    (pretty-print goal-bytes)
+    (println "Goal xor")
+    (pretty-print goal-xor)
+    (println "Cipher data")
+    (pretty-print cipher-data)
+    (println "Decrypted cipher data:\n" (data->string (decrypt-16 cipher-data)))
+    (pretty-print goal-cipher-data)
+    (println "Decrypted goal cipher data:\n" (data->string (decrypt-16 goal-cipher-data)))
+    (is-admin? goal-cipher-data)))

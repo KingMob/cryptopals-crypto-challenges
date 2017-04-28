@@ -28,6 +28,16 @@
           d))
       d)))
 
+(defn pkcs-unpad-ex [blocksize d]
+  {:pre [(s/valid? :app.util/data d) (s/valid? pos-int? blocksize)]}
+  (let [last-byte (last d)]
+    (if (and (pos? last-byte) (< last-byte blocksize))
+      (let [possible-pad (subvec d (- (count d) last-byte) (count d))]
+        (if (every? #(= last-byte %) possible-pad)
+          (subvec d 0 (- (count d) last-byte))
+          (throw (ex-info "Invalid PKCS padding" {:bytes (take-last blocksize d)}))))
+      d)))
+
 (def ^:private cipher (Cipher/getInstance "AES/ECB/NoPadding"))
 (defn- ecb [mode key d]
   (.init cipher mode (SecretKeySpec. (data->bytes key) "AES"))
