@@ -96,6 +96,13 @@
         id-data (repeat (count sample-data) 0)]
     (is (= sample-data (xor sample-data id-data)))))
 
+(deftest xor-equivalency
+  (let [a (repeatedly 10 #(rand-int 256))
+        b (repeatedly 10 #(rand-int 256))
+        x (xor a b)]
+    (is (= a (xor b x)))
+    (is (= b (xor a x)))))
+
 (defn byte-fill [size b] (repeat size b))
 
 (defn xor-with-byte-fill [d b]

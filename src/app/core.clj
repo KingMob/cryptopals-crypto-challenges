@@ -162,17 +162,6 @@
 (defn rand-aes-block []
   (rand-bytes aes-block-size))
 
-(defn encryption-oracle [d]
-  {:pre [(s/valid? :app.util/data d)]}
-  (let [k (rand-aes-block)
-        iv (rand-aes-block)
-        pre-padding (rand-bytes (+ 5 (rand-int 6)))
-        post-padding (rand-bytes (+ 5 (rand-int 6)))
-        plain-data (into [] cat [pre-padding d post-padding])]
-    (if (zero? (rand-int 2))
-      {:mode :ecb :cipher-data (ecb-encrypt k plain-data)}
-      {:mode :cbc :cipher-data (cbc-encrypt k iv plain-data)})))
-
 
 (defn- byte-map-entry [enc-oracle-fn input-block b offset bsize]
   {:pre [(s/valid? :app.util/data input-block) (s/valid? nat-int? offset) (s/valid? pos? bsize)]

@@ -25,7 +25,6 @@
 (let [xor-chars (range 32 127)
       cipher-hex "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"
       cipher-data (hex->data cipher-hex)]
-  #_(most-likely-xor-byte cipher-data)
   (->> (chi2-results xor-chars cipher-data)
        (sort-by :chi2)
        (first)))
@@ -112,7 +111,6 @@
 ;;   (doall
 ;;    (for [key probable-keys]
 ;;      (do
-;;        #_(println (data->bytes (string->data (:most-likely-key key))))
 ;;        (.init cipher Cipher/DECRYPT_MODE (SecretKeySpec. (data->bytes (string->data (:most-likely-key key))) "AES"))
 ;;        (data->string (bytes->data (.doFinal cipher (data->bytes probably-encrypted)))))
 ;;      )))

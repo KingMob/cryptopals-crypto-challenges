@@ -16,39 +16,31 @@
         num-bytes-to-add (- blocksize bytes-in-last-block)]
     (if (pos? bytes-in-last-block)
       (into d (repeat num-bytes-to-add (unchecked-byte num-bytes-to-add)))
-      d)))
+      (into d (repeat blocksize (unchecked-byte blocksize))))))
 
 (defn pkcs7-unpad [blocksize d]
   {:pre [(s/valid? :app.util/data d) (s/valid? pos-int? blocksize)]}
   (let [last-byte (last d)]
-    (if (and (pos? last-byte) (< last-byte blocksize))
-      (let [possible-pad (subvec d (- (count d) last-byte) (count d))]
-        (if (every? #(= last-byte %) possible-pad)
-          (subvec d 0 (- (count d) last-byte))
-          d))
-      d)))
-
-(defn pkcs-unpad-ex [blocksize d]
-  {:pre [(s/valid? :app.util/data d) (s/valid? pos-int? blocksize)]}
-  (let [last-byte (last d)]
-    (if (and (pos? last-byte) (< last-byte blocksize))
+    (if (and (pos? last-byte) (<= last-byte blocksize))
       (let [possible-pad (subvec d (- (count d) last-byte) (count d))]
         (if (every? #(= last-byte %) possible-pad)
           (subvec d 0 (- (count d) last-byte))
           (throw (ex-info "Invalid PKCS padding" {:bytes (take-last blocksize d)}))))
-      d)))
+      (throw (ex-info "Invalid PKCS last byte" {:bytes (last d)})))))
 
 (def ^:private cipher (Cipher/getInstance "AES/ECB/NoPadding"))
 (defn- ecb [mode key d]
   (.init cipher mode (SecretKeySpec. (data->bytes key) "AES"))
-  #_(println (bytes->data (.doFinal cipher (data->bytes d))))
   (bytes->data (.doFinal cipher (data->bytes d))))
 
 (defn ecb-decrypt [k d]
-  (pkcs7-unpad aes-block-size (ecb Cipher/DECRYPT_MODE k d)))
+  {:pre [(s/valid? #(= 0 (mod (count %) aes-block-size)) d)]}
+  (ecb Cipher/DECRYPT_MODE k d)
+  #_(pkcs7-unpad aes-block-size (ecb Cipher/DECRYPT_MODE k d)))
 
 (defn ecb-encrypt [k d]
-  (ecb Cipher/ENCRYPT_MODE k (pkcs7-pad aes-block-size d)))
+  {:pre [(s/valid? #(= 0 (mod (count %) aes-block-size)) d)]}
+  (ecb Cipher/ENCRYPT_MODE k d))
 
 (deftest ecbtest
   (let [k (pkcs7-pad aes-block-size (string->data "YELLOW SUBMARINE"))
@@ -58,18 +50,18 @@
 ;; CBC functions
 
 (defn cbc-decrypt [k iv d]
-  (let [blocks (partition aes-block-size (pkcs7-pad aes-block-size d))
+  {:pre [(s/valid? #(= 0 (mod (count %) aes-block-size)) d)]}
+  (let [blocks (partition aes-block-size d)
         d1 (into [iv] conj (butlast blocks))
         d2 blocks]
-    (pkcs7-unpad
-     aes-block-size
-     (vec (mapcat
-           #(xor %1 (ecb-decrypt k %2))
-           d1
-           d2)))))
+    (vec (mapcat
+          #(xor %1 (ecb-decrypt k %2))
+          d1
+          d2))))
 
 (defn cbc-encrypt [k iv d]
-  (let [blocks (partition aes-block-size (pkcs7-pad aes-block-size d))]
+  {:pre [(s/valid? #(= 0 (mod (count %) aes-block-size)) d)]}
+  (let [blocks (partition aes-block-size d)]
     (vec
      (apply concat
             (rest (reductions
@@ -95,8 +87,7 @@
 (deftest cbctest
   (let [k (string->data "YELLOW SUBMARINE")
         iv (vec (repeat aes-block-size (unchecked-byte 0)))
-        d #_(string->data "Come together, R")
-        (string->data "Come together, Right now")
+        d (string->data "Come together, Right now")
         cipher-text (cbc-encrypt k iv d)
         ]
     (is (= d (cbc-decrypt k iv (cbc-encrypt k iv d))))))

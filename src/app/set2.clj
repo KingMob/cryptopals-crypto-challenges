@@ -12,16 +12,17 @@
 
 ;; Set 2, challenge 9
 (= (string->data "YELLOW SUBMARINE\04\04\04\04") (pkcs7-pad 20 (string->data "YELLOW SUBMARINE")))
+(= (string->data "YELLOW SUBMARINE\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010\u0010") (pkcs7-pad 16 (string->data "YELLOW SUBMARINE")))
 
 ;; Set 2, challenge 10
 (def test-key-10 (string->data "Octopus's Garden"))
-(data->string (ecb-decrypt test-key-10 (ecb-encrypt test-key-10 (string->data "This be random, man"))))
+(data->string (pkcs7-unpad aes-block-size (ecb-decrypt test-key-10 (ecb-encrypt test-key-10 (pkcs7-pad aes-block-size (string->data "This be random, man"))))))
 
 (def key-10 (string->data "YELLOW SUBMARINE"))
 (def input-10 (base64-decode (str/join (str/split-lines (slurp (io/file (io/resource "10.txt")))))))
 (def iv-10 (repeat 16 0))
 
-(println (data->string (cbc-decrypt key-10 iv-10 input-10)))
+(println (data->string (pkcs7-unpad aes-block-size (cbc-decrypt key-10 iv-10 input-10))))
 ;; "Go white boy, go white boy, go."
 ;; Man, decrypting these lyrics is a real counter-incentive to continuing :)
 
@@ -40,7 +41,19 @@
 ;;; it does, but the accuracy is much lower.
 
 (def X2-threshold 325) ; See http://www.di-mgt.com.au/chisquare-calculator.html w/ 255 df
-; NB: This is ~ p < .001
+;;; NB: This is ~ p < .001
+
+(defn encryption-oracle [d]
+  {:pre [(s/valid? :app.util/data d)]}
+  (let [k (rand-aes-block)
+        iv (rand-aes-block)
+        pre-padding (rand-bytes (+ 5 (rand-int 6)))
+        post-padding (rand-bytes (+ 5 (rand-int 6)))
+        plain-data (into [] cat [pre-padding d post-padding])]
+    (if (zero? (rand-int 2))
+      {:mode :ecb :cipher-data (ecb-encrypt k (pkcs7-pad aes-block-size plain-data))}
+      {:mode :cbc :cipher-data (cbc-encrypt k iv (pkcs7-pad aes-block-size plain-data))})))
+
 
 (defn predicted-oracle-cipher-mode []
   (let [num-bytes 100
@@ -65,7 +78,7 @@
 (defn byte-at-a-time-oracle-12 [d]
   {:pre [(s/valid? :app.util/data d)]}
   (let [plain-data (into [] cat [d (base64-decode secret-string-12)])]
-    (ecb-encrypt random-key-12 plain-data)))
+    (ecb-encrypt random-key-12 (pkcs7-pad aes-block-size plain-data))))
 
 (defn decrypt-byte-at-a-time-ecb-simple []
   (let [test-data (byte-at-a-time-oracle-12 (vec (repeat 1000 0)))
@@ -94,11 +107,11 @@
 
 (def random-key-13 (rand-bytes aes-block-size))
 (defn encrypted-profile [email]
-  (ecb-encrypt random-key-13 (string->data (profile-for email))))
+  (ecb-encrypt random-key-13 (pkcs7-pad aes-block-size (string->data (profile-for email)))))
 
 (defn decrypted-profile [d]
   {:pre [(s/valid? :app.util/data d)]}
-  (url-decode (data->string (ecb-decrypt random-key-13 d))))
+  (url-decode (data->string (pkcs7-unpad aes-block-size (ecb-decrypt random-key-13 d)))))
 
 (def initial-blocks (into [] cat (butlast (partition-all aes-block-size (encrypted-profile "vanil@ice.com"))))) ; Generates the blocks, splitting after "role="
 (def sneaky-email (str "AAAAAAAAAAadmin" (str/join (repeat 11 (char 11))))) ; Generates a block with just "admin" followed by pkcs7 padding
@@ -116,7 +129,7 @@
 (defn byte-at-a-time-oracle-14 [d]
   {:pre [(s/valid? :app.util/data d)]}
   (let [plain-data (into [] cat [random-prefix-14 d (base64-decode secret-string-14)])]
-    (ecb-encrypt random-key-14 plain-data)))
+    (ecb-encrypt random-key-14 (pkcs7-pad aes-block-size plain-data))))
 
 (defn decrypt-byte-at-a-time-ecb-harder []
   (let [test-data [(byte 0)]])
@@ -126,12 +139,12 @@
 ;;; Set 2, challenge 15
 
 (try
-  (pkcs-unpad-ex aes-block-size (repeat 16 (byte 10)))
+  (pkcs7-unpad aes-block-size (repeat 16 (byte 10)))
   (catch Exception e
     "Found correct exception"))
 
 (try
-  (pkcs-unpad-ex aes-block-size (into [] cat [(repeat 12 (byte 10)) (repeat 4 (byte 4))]))
+  (pkcs7-unpad aes-block-size (into [] cat [(repeat 12 (byte 10)) (repeat 4 (byte 4))]))
   (println "Correctly found no exception")
   (catch Exception e
     "Found incorrect exception"))
@@ -155,14 +168,14 @@
     (cbc-encrypt random-key-16 random-iv-16 (pkcs7-pad aes-block-size d))))
 
 (defn decrypt-16 [cipher-data]
-  (cbc-decrypt random-key-16 random-iv-16 cipher-data))
+  (pkcs7-unpad aes-block-size (cbc-decrypt random-key-16 random-iv-16 cipher-data)))
 
 (defn is-admin? [cipher-data]
   (let [d (decrypt-16 cipher-data)
         s-full (data->string d)]
     (str/includes? s-full goal-string)))
 
-; Requires some knowledge of the decrypted text, so you know what plain text to xor with
+; Requires some knowledge of the decrypted text, so you know which blocks to xor with
 (defn cbc-bitflip []
   (let [prefix-length (count prefix-16)
         goal-bytes (string->data goal-string)
