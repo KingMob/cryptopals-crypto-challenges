@@ -6,7 +6,7 @@
             [clojure.test :refer [deftest is]]
             [byte-streams :as b])
   (:import [javax.crypto Cipher]
-           [javax.crypto.spec SecretKeySpec]))
+           [javax.crypto.spec SecretKeySpec IvParameterSpec]))
 
 (def aes-block-size 16)
 
@@ -76,6 +76,21 @@
                    #(ecb-encrypt k (xor %1 %2))
                    iv
                    blocks))))))
+
+;;; For comparison only, not for use
+(defn- cbc-java [mode k iv d]
+  (let [cipher (Cipher/getInstance "AES/CBC/NoPadding")
+        bs (data->bytes (pkcs7-pad aes-block-size d))]
+    (.init cipher mode
+           (SecretKeySpec. (data->bytes k) "AES")
+           (IvParameterSpec. (data->bytes iv)))
+    (.doFinal cipher bs)))
+
+(defn cbc-java-encrypt [k iv d]
+  (bytes->data (cbc-java Cipher/ENCRYPT_MODE k iv d)))
+
+(defn cbc-java-decrypt [k iv d]
+  (bytes->data (cbc-java Cipher/DECRYPT_MODE k iv d)))
 
 (deftest cbctest
   (let [k (string->data "YELLOW SUBMARINE")

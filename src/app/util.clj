@@ -5,6 +5,7 @@
             [clojure.spec.gen :as gen]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            [clojure.pprint :as pp]
             [medley.core :refer [interleave-all]]
             [taoensso.tufte :as tufte :refer [defnp p profiled profile]])
   (:import [org.apache.commons.codec.binary Base64 Hex]))
@@ -17,6 +18,8 @@
 (s/def ::data (s/coll-of integer? :into []))
 (s/def ::data-w-nils (s/coll-of #(or (integer? %) (nil? %))))
 
+(defn print-bits [b]
+  (pp/cl-format true "~8,'0b" b))
 
 (defn hex-char->number [^Character h]
   {:pre [(s/valid? ::hex-char h)]}
@@ -68,6 +71,10 @@
    (Hex/decodeHex
     (.toCharArray s))))
 
+(defn hex-decode-spaces [s]
+  {:pre [(s/valid? string? s)]}
+  (hex-decode (str/replace s #"\s" "")))
+
 (defn pretty-print [d]
   {:pre [(s/valid? ::data d)]}
   (b/print-bytes (data->bytes d)))
@@ -84,7 +91,12 @@
     (is (= sample-str (xor sample-str id-str)))
     (is (= id-str (xor sample-str sample-str)))))
 
-(defn byte-fill [size b] (take size (repeat b)))
+(deftest xor-neg
+  (let [sample-data (repeat 5 -100)
+        id-data (repeat (count sample-data) 0)]
+    (is (= sample-data (xor sample-data id-data)))))
+
+(defn byte-fill [size b] (repeat size b))
 
 (defn xor-with-byte-fill [d b]
   (let [key-bytes (byte-fill (count d) b)]

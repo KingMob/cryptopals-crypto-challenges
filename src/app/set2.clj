@@ -167,22 +167,16 @@
   (let [prefix-length (count prefix-16)
         goal-bytes (string->data goal-string)
         goal-length (count goal-bytes)
-        input (repeat goal-length (int 0))
-        cipher-data (encrypt-16 input)
-        goal-xor (xor goal-bytes input)
         goal-offset (- prefix-length aes-block-size)
-        goal-cipher-data (into [] cat [(take goal-offset cipher-data)
-                                       goal-xor
-                                       (drop (+ goal-offset goal-length) cipher-data)])]
-    (println "Input bytes")
-    (pretty-print input)
-    (println "Goal bytes")
-    (pretty-print goal-bytes)
-    (println "Goal xor")
-    (pretty-print goal-xor)
-    (println "Cipher data")
-    (pretty-print cipher-data)
-    (println "Decrypted cipher data:\n" (data->string (decrypt-16 cipher-data)))
-    (pretty-print goal-cipher-data)
-    (println "Decrypted goal cipher data:\n" (data->string (decrypt-16 goal-cipher-data)))
+        input (repeat goal-length (byte \A))
+        cipher-data (encrypt-16 input)
+        bytes-to-replace (subvec cipher-data goal-offset
+                                 (+ goal-offset goal-length))
+        decrypted-but-not-xored-target-block (xor bytes-to-replace input)
+        goal-xor (xor goal-bytes decrypted-but-not-xored-target-block)
+        goal-cipher-data (into []
+                               cat
+                               [(take goal-offset cipher-data)
+                                goal-xor
+                                (drop (+ goal-offset goal-length) cipher-data)])]
     (is-admin? goal-cipher-data)))
