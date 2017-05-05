@@ -18,8 +18,23 @@
 (s/def ::data (s/coll-of integer? :into []))
 (s/def ::data-w-nils (s/coll-of #(or (integer? %) (nil? %))))
 
+(defn bit-string [b]
+  (let [class-name (.getName (class b))
+        is-byte (= "java.lang.Byte" class-name)
+        num-bits (clojure.lang.Reflector/getStaticField class-name "SIZE")
+        format-string (str "~" num-bits "'0b")
+        bin-str-fn #(clojure.lang.Reflector/invokeStaticMethod
+                     (if is-byte "java.lang.Integer" class-name)
+                     "toBinaryString"
+                     (to-array [%]))
+        bit-string (if is-byte
+                     (str/join (take-last 8 (bin-str-fn (Byte/toUnsignedInt b))))
+                     (bin-str-fn b))]
+    (str (str/join (repeat (- num-bits (count bit-string)) \0))
+         bit-string)))
+
 (defn print-bits [b]
-  (pp/cl-format true "~8,'0b" b))
+  (println (bit-string b)))
 
 (defn hex-char->number [^Character h]
   {:pre [(s/valid? ::hex-char h)]}
@@ -102,6 +117,12 @@
         x (xor a b)]
     (is (= a (xor b x)))
     (is (= b (xor a x)))))
+
+(deftest xor-commutativity
+  (let [a (repeatedly 10 #(rand-int 256))
+        b (repeatedly 10 #(rand-int 256))
+        c (repeatedly 10 #(rand-int 256))]
+    (is (= (xor a (xor b c)) (xor (xor a b) c)))))
 
 (defn byte-fill [size b] (repeat size b))
 
