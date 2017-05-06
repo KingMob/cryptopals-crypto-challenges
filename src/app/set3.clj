@@ -55,71 +55,56 @@ MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93"))
         original-byte-to-modify (iv block-index)
         original-byte-as-int (Byte/toUnsignedInt original-byte-to-modify)
         candidate-bytes (into [] cat [(range original-byte-as-int)
-                                      (range (inc original-byte-as-int) 256)])
+                                      (range (inc original-byte-as-int) 256)
+                                      [original-byte-to-modify]]) ; original byte is last, becuase if it deciphers to real PKCS padding, it's probably not 1
         num-candidate-bytes (count candidate-bytes)
         target-val (unchecked-byte (inc cipher-byte-offset))]
-    (println "Block index:" block-index)
-    (println "Target value:" target-val (bit-string target-val))
-    (println "IV or prev block:")
-    (pretty-print iv)
-    (println "Original cipher data:")
-    (pretty-print cipher-block)
-    (println "Original byte to modify" (hex-encode [original-byte-to-modify]) (bit-and 0xff original-byte-to-modify) (bit-string original-byte-to-modify))
-    (println "Target cipher byte" (hex-encode [cipher-byte-to-decrypt]) cipher-byte-to-decrypt (bit-string cipher-byte-to-decrypt))
-    (println "Mod bytes (first):" mod-bytes)
-    #_(println "num cand bytes" (count candidate-bytes))
     (loop [b-index 0]
       (if (>= b-index num-candidate-bytes)
-        nil
+        (throw (ex-info "Didn't find a byte" {:block-index block-index
+                                              :cipher-block cipher-block
+                                              :iv iv
+                                              :cipher-byte-offset cipher-byte-offset}))
         (let [b (unchecked-byte (candidate-bytes b-index))
               modified-iv (into [] cat [(subvec iv 0 block-index)
                                         [b]
                                         mod-bytes])
               valid-padding (padding-oracle-17 modified-iv cipher-block)]
-          #_(println "Byte:" (Byte/toUnsignedInt b) (bit-string (unchecked-byte b)))
-          (when (= b 0) (pretty-print modified-iv))
           (if valid-padding
-            (do
-              (println "Modified byte:" b (bit-string b))
-              {:decrypted-bytes (bit-xor original-byte-to-modify
-                                         b
-                                         target-val)
-               :deciphered-but-not-xored-bytes (bit-xor b target-val)})
+            {:decrypted-bytes (bit-xor original-byte-to-modify
+                                       b
+                                       target-val)
+             :deciphered-but-not-xored-bytes (bit-xor b target-val)}
             (recur (inc b-index))))))))
 
 (defn pad-oracle-decrypt-block [pad-oracle-fn iv cipher-block]
   (let [offsets (vec (range 16))]
+    (reduce
+     (fn [res offset]
+       (let [byte-result
+             (pad-oracle-decrypt-byte
+              pad-oracle-fn
+              iv
+              cipher-block
+              offset
+              (mapv #(bit-xor % (inc offset))
+                    (:deciphered-but-not-xored-bytes res)))]
+         (merge-with #(cons %2 %1) res byte-result)))
+     {:decrypted-bytes []
+      :deciphered-but-not-xored-bytes []}
+     offsets)))
 
-    (reduce (fn [res offset]
-              (println "Current offset" offset)
-              (println "Result so far" res)
-              (let [byte-result
-                    (pad-oracle-decrypt-byte
-                     pad-oracle-fn
-                     iv
-                     cipher-block
-                     offset
-                     (mapv #(bit-xor % (inc offset))
-                           (:deciphered-but-not-xored-bytes res)))]
+(defn pad-oracle-decrypt [pad-oracle-fn]
+  (let [initial-iv iv-17
+        cipher-data (enc-17)
+        cipher-blocks (map vec (partition aes-block-size cipher-data))
+        ivs (into [] cat [[initial-iv] (butlast cipher-blocks)])]
+    (pkcs7-unpad aes-block-size
+                 (vec
+                  (:decrypted-bytes
+                   (apply merge-with concat
+                          (map (partial pad-oracle-decrypt-block pad-oracle-fn)
+                               ivs
+                               cipher-blocks)))))))
 
-                (println "Byte results" byte-result)
-                (merge-with #(cons %2 %1) #_(partial apply conj) res byte-result)))
-            {:decrypted-bytes []
-             :deciphered-but-not-xored-bytes []}
-            offsets)
-
-    #_(loop [b-index 0]
-      (if (> b-index num-candidate-bytes)
-        nil
-        (let [b (unchecked-byte (candidate-bytes b-index))
-              modified-cipher-data (assoc cipher-data target-byte-index b)
-              valid-padding (padding-oracle-17 iv modified-cipher-data)]
-          #_(println "Byte:" b (bit-string (unchecked-byte b)))
-          #_(pretty-print modified-cipher-data)
-          (if valid-padding
-            (do
-              (println "Byte:" b (bit-string b))
-              (bit-xor target-cipher-byte
-                       b
-                       (unchecked-byte 1)))
-            (recur (inc b-index))))))))
+(data->string (pad-oracle-decrypt padding-oracle-17))
