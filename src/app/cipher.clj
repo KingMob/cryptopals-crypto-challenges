@@ -9,6 +9,7 @@
            [javax.crypto.spec SecretKeySpec IvParameterSpec]))
 
 (def aes-block-size 16)
+(s/def ::key (s/coll-of integer? :count aes-block-size :into []))
 
 (defn pkcs7-pad [blocksize d]
   {:pre [(s/valid? :app.util/data d) (s/valid? pos-int? blocksize)]}
@@ -30,13 +31,14 @@
 
 (def ^:private cipher (Cipher/getInstance "AES/ECB/NoPadding"))
 (defn- ecb [mode key d]
+  {:pre [(s/valid? ::key key)
+         (s/valid? :app.util/data d)]}
   (.init cipher mode (SecretKeySpec. (data->bytes key) "AES"))
   (bytes->data (.doFinal cipher (data->bytes d))))
 
 (defn ecb-decrypt [k d]
   {:pre [(s/valid? #(= 0 (mod (count %) aes-block-size)) d)]}
-  (ecb Cipher/DECRYPT_MODE k d)
-  #_(pkcs7-unpad aes-block-size (ecb Cipher/DECRYPT_MODE k d)))
+  (ecb Cipher/DECRYPT_MODE k d))
 
 (defn ecb-encrypt [k d]
   {:pre [(s/valid? #(= 0 (mod (count %) aes-block-size)) d)]}
@@ -91,3 +93,29 @@
         cipher-text (cbc-encrypt k iv d)
         ]
     (is (= d (cbc-decrypt k iv (cbc-encrypt k iv d))))))
+
+
+;;; CTR functions
+(defn- le-64bit-block [x]
+  {:pre [(s/valid? integer? x)]}
+  (bytes->data
+   (.. (java.nio.ByteBuffer/allocate java.lang.Long/BYTES)
+       (order java.nio.ByteOrder/LITTLE_ENDIAN)
+       (putLong (long x))
+       (array))))
+
+(defn ctr-keystream [nonce k]
+  (let [nonce-bytes (le-64bit-block nonce)
+        counters (map le-64bit-block (iterate inc 0))
+        nonce-counters (map concat (repeat nonce-bytes) counters)]
+    (map (partial ecb-encrypt k) nonce-counters)))
+
+(defn ctr-crypt [nonce k d]
+  "Works for both decryption and encryption, just depends on whether you pass in plain data or cipher data"
+  {:pre [(s/valid? :app.util/data d)]}
+  (let [keystream (ctr-keystream nonce k)
+        data-blocks (partition-all aes-block-size d)
+        num-blocks (count data-blocks)
+        key-blocks (take num-blocks keystream)
+        key-bytes (take (count d) (apply concat key-blocks))]
+    (doall (xor d key-bytes))))

@@ -108,3 +108,12 @@ MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93"))
                                cipher-blocks)))))))
 
 (data->string (pad-oracle-decrypt padding-oracle-17))
+
+
+;;; Set 3, challenge 18
+
+(def cipher-data-18 (base64-decode "L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ=="))
+(def key-18 (string->data "YELLOW SUBMARINE"))
+
+(data->string (ctr-crypt 0 key-18 cipher-data-18))
+;;; All right stop, Collaborate and listen

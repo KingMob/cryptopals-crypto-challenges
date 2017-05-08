@@ -73,7 +73,7 @@
   (str/join (map #(char (bit-and 0xFF %)) d)))
 
 (defn string->data [s]
-  #_(mapv long s)
+  {:pre [(s/valid? string? s)]}
   (into (vector-of :byte) (byte-streams/to-byte-array s)))
 
 (defn hex-encode [d]
