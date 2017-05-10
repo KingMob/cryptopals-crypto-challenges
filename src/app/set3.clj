@@ -169,7 +169,7 @@ QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
 ;;; Since the nonce was reused, every cipher byte was xored against the same byte in the keystream.
 ;;; This means we can analyze the bytes statistically
 
-(let [common-cipher-bytes (filterv #(> (count %) 1) (transpose-all cipher-datas-19))
+(let [common-cipher-bytes (filterv #(> (count (distinct %)) 1) (transpose-all cipher-datas-19))
       probable-key-stream (mapv #(unchecked-byte (most-likely-xor-byte %)) common-cipher-bytes)
       probable-decodings (mapv (partial xor-unequal probable-key-stream) cipher-datas-19)]
   (map #(println (data->string %)) probable-decodings))
@@ -178,3 +178,12 @@ QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
 
 
 ;;; Set 3, challenge 20
+;;; I think I was supposed to do challenge 19 by hand, but I already had the automation code...
+(def cipher-datas-20 (map base64-decode (str/split-lines (slurp (io/file (io/resource "20.txt"))))))
+
+(let [common-cipher-bytes (filterv #(> (count (distinct %)) 1) (transpose-all cipher-datas-20))
+      probable-key-stream (mapv #(unchecked-byte (most-likely-xor-byte %)) common-cipher-bytes)
+      probable-decodings (mapv (partial xor-unequal probable-key-stream) cipher-datas-20)]
+  (map #(println (data->string %)) probable-decodings))
+
+;;; My method works with later bytes, though the accuracy drops off, so the later bytes are likely wrong
