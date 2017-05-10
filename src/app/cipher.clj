@@ -110,8 +110,9 @@
         nonce-counters (map concat (repeat nonce-bytes) counters)]
     (map (partial ecb-encrypt k) nonce-counters)))
 
-(defn ctr-crypt [nonce k d]
+(defn ctr-crypt
   "Works for both decryption and encryption, just depends on whether you pass in plain data or cipher data"
+  [nonce k d]
   {:pre [(s/valid? :app.util/data d)]}
   (let [keystream (ctr-keystream nonce k)
         data-blocks (partition-all aes-block-size d)

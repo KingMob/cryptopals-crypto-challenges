@@ -7,6 +7,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            [medley.core :refer [interleave-all]]
             [taoensso.tufte :as tufte :refer (defnp p profiled profile)]))
 
 ;;; Set 3, challenge 17
@@ -42,8 +43,8 @@ MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93"))
   (let [plain-data (pkcs7-pad aes-block-size (string->data "abc123"))
         good-data (cbc-encrypt key-17 iv-17 plain-data)
         bad-data (assoc good-data (dec (count good-data)) -1)]
-    (is (= true (padding-oracle-17 iv-17 good-data)))
-    (is (= false (padding-oracle-17 iv-17 bad-data)))))
+    (is (true? (padding-oracle-17 iv-17 good-data)))
+    (is (false? (padding-oracle-17 iv-17 bad-data)))))
 
 (defn pad-oracle-decrypt-byte [pad-oracle-fn iv cipher-block cipher-byte-offset mod-bytes]
   {:pre [(s/valid? #(= aes-block-size (count %)) cipher-block)
@@ -117,3 +118,63 @@ MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93"))
 
 (data->string (ctr-crypt 0 key-18 cipher-data-18))
 ;;; All right stop, Collaborate and listen
+
+
+;;; Set 3, challenge 19
+(def fixed-nonce 0)
+(def key-19 (rand-aes-block))
+(def cipher-datas-19 (mapv
+                      #(ctr-crypt fixed-nonce key-19 (base64-decode %))
+                      (str/split-lines "SSBoYXZlIG1ldCB0aGVtIGF0IGNsb3NlIG9mIGRheQ==
+Q29taW5nIHdpdGggdml2aWQgZmFjZXM=
+RnJvbSBjb3VudGVyIG9yIGRlc2sgYW1vbmcgZ3JleQ==
+RWlnaHRlZW50aC1jZW50dXJ5IGhvdXNlcy4=
+SSBoYXZlIHBhc3NlZCB3aXRoIGEgbm9kIG9mIHRoZSBoZWFk
+T3IgcG9saXRlIG1lYW5pbmdsZXNzIHdvcmRzLA==
+T3IgaGF2ZSBsaW5nZXJlZCBhd2hpbGUgYW5kIHNhaWQ=
+UG9saXRlIG1lYW5pbmdsZXNzIHdvcmRzLA==
+QW5kIHRob3VnaHQgYmVmb3JlIEkgaGFkIGRvbmU=
+T2YgYSBtb2NraW5nIHRhbGUgb3IgYSBnaWJl
+VG8gcGxlYXNlIGEgY29tcGFuaW9u
+QXJvdW5kIHRoZSBmaXJlIGF0IHRoZSBjbHViLA==
+QmVpbmcgY2VydGFpbiB0aGF0IHRoZXkgYW5kIEk=
+QnV0IGxpdmVkIHdoZXJlIG1vdGxleSBpcyB3b3JuOg==
+QWxsIGNoYW5nZWQsIGNoYW5nZWQgdXR0ZXJseTo=
+QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=
+VGhhdCB3b21hbidzIGRheXMgd2VyZSBzcGVudA==
+SW4gaWdub3JhbnQgZ29vZCB3aWxsLA==
+SGVyIG5pZ2h0cyBpbiBhcmd1bWVudA==
+VW50aWwgaGVyIHZvaWNlIGdyZXcgc2hyaWxsLg==
+V2hhdCB2b2ljZSBtb3JlIHN3ZWV0IHRoYW4gaGVycw==
+V2hlbiB5b3VuZyBhbmQgYmVhdXRpZnVsLA==
+U2hlIHJvZGUgdG8gaGFycmllcnM/
+VGhpcyBtYW4gaGFkIGtlcHQgYSBzY2hvb2w=
+QW5kIHJvZGUgb3VyIHdpbmdlZCBob3JzZS4=
+VGhpcyBvdGhlciBoaXMgaGVscGVyIGFuZCBmcmllbmQ=
+V2FzIGNvbWluZyBpbnRvIGhpcyBmb3JjZTs=
+SGUgbWlnaHQgaGF2ZSB3b24gZmFtZSBpbiB0aGUgZW5kLA==
+U28gc2Vuc2l0aXZlIGhpcyBuYXR1cmUgc2VlbWVkLA==
+U28gZGFyaW5nIGFuZCBzd2VldCBoaXMgdGhvdWdodC4=
+VGhpcyBvdGhlciBtYW4gSSBoYWQgZHJlYW1lZA==
+QSBkcnVua2VuLCB2YWluLWdsb3Jpb3VzIGxvdXQu
+SGUgaGFkIGRvbmUgbW9zdCBiaXR0ZXIgd3Jvbmc=
+VG8gc29tZSB3aG8gYXJlIG5lYXIgbXkgaGVhcnQs
+WWV0IEkgbnVtYmVyIGhpbSBpbiB0aGUgc29uZzs=
+SGUsIHRvbywgaGFzIHJlc2lnbmVkIGhpcyBwYXJ0
+SW4gdGhlIGNhc3VhbCBjb21lZHk7
+SGUsIHRvbywgaGFzIGJlZW4gY2hhbmdlZCBpbiBoaXMgdHVybiw=
+VHJhbnNmb3JtZWQgdXR0ZXJseTo=
+QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
+
+;;; Since the nonce was reused, every cipher byte was xored against the same byte in the keystream.
+;;; This means we can analyze the bytes statistically
+
+(let [common-cipher-bytes (filterv #(> (count %) 1) (transpose-all cipher-datas-19))
+      probable-key-stream (mapv #(unchecked-byte (most-likely-xor-byte %)) common-cipher-bytes)
+      probable-decodings (mapv (partial xor-unequal probable-key-stream) cipher-datas-19)]
+  (map #(println (data->string %)) probable-decodings))
+
+;;; Man, Yeats is a way better poet than Van Winkle
+
+
+;;; Set 3, challenge 20

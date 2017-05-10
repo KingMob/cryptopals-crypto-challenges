@@ -100,6 +100,12 @@
          (= (count d1) (count d2))]}
   (mapv bit-xor d1 d2))
 
+(defn xor-unequal
+  "Returns the xor of the data, ignoring length differences."
+  [d1 d2]
+  (let [max-length (min (count d1) (count d2))]
+    (xor (take max-length d1) (take max-length d2))))
+
 (deftest xor-identity
   (let [sample-str (string->data "abc123")
         id-str (string->data (repeat (count sample-str) 0))]
@@ -172,3 +178,12 @@
         d2-unique (apply conj
                          (into [] (map second) divergent-pairs) (nthrest d2 min-size))]
     [d1-unique d2-unique]))
+
+(defn transpose-all
+  "A sort of combination of interleave-all and partition. Returns the first item in each collection in a collection, then the second item in each. Does not stop until it consumes all items."
+  [colls]
+  (let [max-length (apply max (map count colls))]
+    (for [n (range max-length)]
+      (->> colls
+           (filter #(> (count %) n))
+           (mapv #(nth % n))))))

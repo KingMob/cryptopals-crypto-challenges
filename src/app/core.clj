@@ -75,9 +75,6 @@
       (p :min-key (apply min-key :chi2 (chi2-results xor-search-bytes d))))))
 
 (defn hamming [d1 d2]
-  #_{:pre [(s/valid? :app.util/data d1)
-         (s/valid? :app.util/data d2)
-         (= (count d1) (count d2))]}
   (reduce
    +
    0
