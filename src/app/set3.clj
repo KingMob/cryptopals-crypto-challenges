@@ -1,6 +1,7 @@
 (ns app.set3
   (:require [app.core :refer :all]
             [app.util :refer :all]
+            [app.rng :refer :all]
             [app.cipher :refer :all]
             [clojure.spec :as s]
             [clojure.spec.test :as stest]
@@ -188,3 +189,33 @@ QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
   (map #(println (data->string %)) probable-decodings))
 
 ;;; My method works with later bytes, though the accuracy drops off, so the later bytes are likely wrong
+
+
+;;; Set 3, challenge 21
+;;; See rng.clj
+
+
+;;; Set 3, challenge 22
+(defn int-timestamp [] (int (/ (System/currentTimeMillis) 1000)))
+(defn sleep-22 [] (Thread/sleep (* 1000 (+ 40 (rand-int 1000)))))
+
+(defn seed-rng-22
+  "Waits a while, then seeds the MT with the timestamp, then waits a bit longer and returns the first 32-bit output."
+  []
+  (sleep-22)
+  (mt-seed (int-timestamp))
+  (sleep-22)
+  (mt-extract-number))
+
+(def rng-output-22 606212249)
+
+(defn compute-timestamp-seed [rng-output]
+  (let [curr-timestamp (int-timestamp)
+        oldest-timestamp (- curr-timestamp 3600) ; only search up to the last hour
+        timestamps (iterate dec curr-timestamp)
+        first-rng-for-seed (fn [timestamp]
+                             (mt-seed timestamp)
+                             (mt-extract-number))]
+    (some #(if (= rng-output-22 (first-rng-for-seed %)) %) timestamps)))
+
+;;; (compute-timestamp-seed rng-output-22)
