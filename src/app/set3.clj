@@ -219,3 +219,43 @@ QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
     (some #(if (= rng-output-22 (first-rng-for-seed %)) %) timestamps)))
 
 ;;; (compute-timestamp-seed rng-output-22)
+
+
+;;; Set 3, challenge 23
+;;; There are several ways to tackle inverting the MT19937 temper fn.
+;;; 1. While it's implemented as a bunch of bit ops, it can be modeled as a large
+;;; matrix multiplication, which is invertible.
+;;; 2. Since the tempering steps involve xoring the data with altered versions
+;;; of itself, we could build a constraint solver on the bits to find a solution.
+;;; Not sure if that would always produce unique values, though.
+;;; 3. For 32-bit MT, the various constants heavily constrain the search space. It's
+;;; more than feasible to just brute-force the search for each previous datum. Not
+;;; sure if that's less work than expressing the constraints in a solver, though.
+;;; 4. Compute the bit ops necessary to invert. This is what most people have done,
+;;; and what I'll do.
+
+(def rand-seed-23 (rand-int Integer/MAX_VALUE))
+
+(mt-seed rand-seed-23)
+(def orig-MT @MT)
+
+(def mt-nums
+  (vec
+   (for [i (range app.rng/n)]
+     (mt-extract-number))))
+
+(def untempered-mt
+  (vec
+   (for [i (range app.rng/n)]
+     (mt-untemper (mt-nums i)))))
+
+(= untempered-mt (@MT :mt))
+
+(def copied-MT {:mt untempered-mt
+                :index app.rng/n})
+
+(def next-10 (repeatedly 10 mt-extract-number))
+(reset! MT copied-MT)
+(def predicted-10 (repeatedly 10 mt-extract-number))
+
+(= next-10 predicted-10)

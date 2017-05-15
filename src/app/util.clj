@@ -33,8 +33,20 @@
     (str (str/join (repeat (- num-bits (count bit-string)) \0))
          bit-string)))
 
-(defn print-bits [b]
-  (println (bit-string b)))
+(defn print-bits
+  ([b]
+   (print-bits b nil))
+  ([b chunk-size]
+   (let [bstring (bit-string b)]
+     (if chunk-size
+       (->> bstring
+            (str/reverse)
+            (partition-all chunk-size)
+            (map str/join)
+            (str/join "-")
+            (str/reverse)
+            (println))
+       (println bstring)))))
 
 (defn hex-char->number [^Character h]
   {:pre [(s/valid? ::hex-char h)]}
