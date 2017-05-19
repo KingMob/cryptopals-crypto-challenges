@@ -8,6 +8,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
+            ;[byte-streams :as bs]
             [medley.core :refer [interleave-all]]
             [taoensso.tufte :as tufte :refer (defnp p profiled profile)]))
 
@@ -259,3 +260,25 @@ QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
 (def predicted-10 (repeatedly 10 mt-extract-number))
 
 (= next-10 predicted-10)
+
+;;; Follow-up
+;;; The problem is that the MT algorithm is invertible. It allows me to reproduce the
+;;; MT state with at most 2n-1 outputs. I may not know what the index is, but that's
+;;; just a matter of sliding a window across the untempered data until I hit on a
+;;; state that reproduces the next outputs.
+
+;;; If a slower, non-invertible transformation is used, like a hash, I shouldn't be
+;;; able to reproduce the state this way.
+
+
+;;; Set 3, challenge 24
+
+(defn mt-keystream [seed]
+  {:pre [(s/valid? #(= java.lang.Short (class %)) seed)]}
+  (mt-seed seed)
+  (mapcat #(long-bytes % 4) (repeatedly mt-extract-number)))
+
+(defn mt-crypt [seed d]
+  (stream-crypt (mt-keystream seed) d))
+
+(def plain-data-24 (string->data "AAAAAAAAAAAAAA"))

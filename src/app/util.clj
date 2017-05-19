@@ -199,3 +199,9 @@
       (->> colls
            (filter #(> (count %) n))
            (mapv #(nth % n))))))
+
+(defn long-bytes [^Long l num-bytes]
+  (let [bb (java.nio.ByteBuffer/allocate Long/BYTES)]
+    (.putLong bb l)
+    (for [i (range (dec 8) (dec num-bytes) -1)]
+      (.get bb i))))

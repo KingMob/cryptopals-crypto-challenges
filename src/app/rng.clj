@@ -1,7 +1,7 @@
 (ns app.rng
   (:require [app.core :refer :all]
             [app.util :refer :all]
-            [app.uint32 :as u32 :refer [<< >>> >>]]
+            [app.uint32 :as u32 :refer [<< >>> >> uint32]]
             [clojure.spec :as s]
             [clojure.spec.test :as stest]
             [clojure.test :refer [deftest is testing run-tests]]
