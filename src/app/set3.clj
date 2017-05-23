@@ -197,7 +197,6 @@ QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
 
 
 ;;; Set 3, challenge 22
-(defn int-timestamp [] (int (/ (System/currentTimeMillis) 1000)))
 (defn sleep-22 [] (Thread/sleep (* 1000 (+ 40 (rand-int 1000)))))
 
 (defn seed-rng-22
@@ -273,7 +272,7 @@ QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
 
 ;;; Set 3, challenge 24
 
-(defn mt-keystream [seed]
+(defn- mt-keystream [seed]
   {:pre [(s/valid? #(= java.lang.Short (class %)) seed)]}
   (mt-seed seed)
   (mapcat #(long-bytes % 4) (repeatedly mt-extract-number)))
@@ -281,4 +280,48 @@ QSB0ZXJyaWJsZSBiZWF1dHkgaXMgYm9ybi4=")))
 (defn mt-crypt [seed d]
   (stream-crypt (mt-keystream seed) d))
 
-(def plain-data-24 (string->data "AAAAAAAAAAAAAA"))
+(def known-plain-data-24 (string->data "AAAAAAAAAAAAAA"))
+(def plain-data-24 (into [] cat [(rand-bytes (rand-int 16)) known-plain-data-24]))
+(def seed-24 (unchecked-short (rand-int 65536)))
+(def cipher-data-24 (mt-crypt seed-24 plain-data-24))
+
+;;; We know there's a bunch of A's in there, and with only a
+;;; 16-bit seed, we can simply run through them all
+(defn recover-mt-seed [cipher-data]
+  (let [num-known-bytes (count known-plain-data-24)
+        num-rand-bytes (- (count plain-data-24) (count known-plain-data-24))
+        plain-data (into [] cat [(repeat num-rand-bytes 0) known-plain-data-24])
+        known-cipher-data (subvec cipher-data num-known-bytes)]
+    (->
+     (filter
+      #(= known-cipher-data (subvec (second %) num-known-bytes))
+      (for [i (range 65536)]
+        (let [seed (unchecked-short i)]
+          [seed (mt-crypt seed plain-data)])))
+     (ffirst))))
+
+(let [seed (recover-mt-seed cipher-data-24)]
+  (-> seed
+      (short)
+      (mt-crypt cipher-data-24)
+      (data->string)))
+
+(def password-timestamp-known-data (repeat 20 0))
+(def password-reset-token (mt-crypt (unchecked-short (int-timestamp)) password-timestamp-known-data))
+
+(defn check-password-token [token]
+  (let [timestamp (int-timestamp)
+        hour-ago-timestamp (- timestamp 3600)
+        timestamps-to-check (range hour-ago-timestamp timestamp)]
+    (->
+     (filter
+      #(= token (second %))
+      (for [i timestamps-to-check]
+        (let [seed (unchecked-short i)]
+          [seed (mt-crypt seed password-timestamp-known-data)])))
+     (ffirst))))
+
+(check-password-token password-reset-token)
+;;; This last bit seems a bit odd... how is it different from just
+;;; using the MT as the token? But several solutions online all
+;;; thought the same thing. There's no plaintext being encrypted, really

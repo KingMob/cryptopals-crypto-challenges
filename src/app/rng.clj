@@ -92,22 +92,34 @@
       (uint32 result))))
 
 (deftest compare-w-apache-commons
-  (let [seed 0
-        apache-mt (MersenneTwister. (int seed))]
-    (mt-seed seed)
-    (is (= (unchecked-int (mt-extract-number)) (.nextInt apache-mt))))
-  (let [seed 5489
-        apache-mt (MersenneTwister. (int seed))]
-    (mt-seed seed)
-    (is (= (unchecked-int (mt-extract-number)) (.nextInt apache-mt))))
-  (let [seed Integer/MIN_VALUE
-        apache-mt (MersenneTwister. (int seed))]
-    (mt-seed seed)
-    (is (= (unchecked-int (mt-extract-number)) (.nextInt apache-mt))))
-  (let [seed -1000
-        apache-mt (MersenneTwister. (int seed))]
-    (mt-seed seed)
-    (is (= (unchecked-int (mt-extract-number)) (.nextInt apache-mt)))))
+  (let [num-checks 10
+        check-fn (fn [apache-mt]
+                   (= (repeatedly num-checks #(unchecked-int (mt-extract-number)))
+                      (repeatedly num-checks #(.nextInt apache-mt))))]
+    (let [seed 0
+          apache-mt (MersenneTwister. (int seed))]
+      (mt-seed seed)
+      (is (check-fn apache-mt)))
+    (let [seed 5489
+          apache-mt (MersenneTwister. (int seed))]
+      (mt-seed seed)
+      (is (check-fn apache-mt)))
+    (let [seed Integer/MIN_VALUE
+          apache-mt (MersenneTwister. (int seed))]
+      (mt-seed seed)
+      (is (check-fn apache-mt)))
+    (let [seed -1000
+          apache-mt (MersenneTwister. (int seed))]
+      (mt-seed seed)
+      (is (check-fn apache-mt)))
+    (let [seed 17642
+          apache-mt (MersenneTwister. (int seed))]
+      (mt-seed seed)
+      (is (check-fn apache-mt)))
+    (let [seed -17643
+          apache-mt (MersenneTwister. (int seed))]
+      (mt-seed seed)
+      (is (check-fn apache-mt)))))
 
 (defn- shift-bit-mask [bit-shift-fn num-shift-bits num-shifts]
   (let [inverse-shift-fn (if (= bit-shift-fn <<)

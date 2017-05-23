@@ -21,14 +21,20 @@
 (defn bit-string [b]
   (let [class-name (.getName (class b))
         is-byte (= "java.lang.Byte" class-name)
+        lacks-toBinaryString-method (or (= "java.lang.Byte" class-name)
+                                      (= "java.lang.Short" class-name))
         num-bits (clojure.lang.Reflector/getStaticField class-name "SIZE")
         format-string (str "~" num-bits "'0b")
         bin-str-fn #(clojure.lang.Reflector/invokeStaticMethod
-                     (if is-byte "java.lang.Integer" class-name)
+                     (if lacks-toBinaryString-method "java.lang.Integer" class-name)
                      "toBinaryString"
                      (to-array [%]))
-        bit-string (if is-byte
-                     (str/join (take-last 8 (bin-str-fn (Byte/toUnsignedInt b))))
+        unsigned-int-fn #(clojure.lang.Reflector/invokeStaticMethod
+                          class-name
+                          "toUnsignedInt"
+                          (to-array [%]))
+        bit-string (if lacks-toBinaryString-method
+                     (str/join (take-last num-bits (bin-str-fn (unsigned-int-fn b))))
                      (bin-str-fn b))]
     (str (str/join (repeat (- num-bits (count bit-string)) \0))
          bit-string)))
@@ -47,6 +53,8 @@
             (str/reverse)
             (println))
        (println bstring)))))
+
+(defn int-timestamp [] (int (/ (System/currentTimeMillis) 1000)))
 
 (defn hex-char->number [^Character h]
   {:pre [(s/valid? ::hex-char h)]}

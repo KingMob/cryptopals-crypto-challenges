@@ -104,18 +104,15 @@
        (putLong (long x))
        (array))))
 
-(defn ctr-keystream [nonce k]
+(defn- ctr-keystream [nonce k]
   (let [nonce-bytes (le-64bit-block nonce)
         counters (map le-64bit-block (iterate inc 0))
         nonce-counters (map concat (repeat nonce-bytes) counters)]
-    (map (partial ecb-encrypt k) nonce-counters)))
+    (mapcat (partial ecb-encrypt k) nonce-counters)))
 
 (defn stream-crypt [keystream d]
   {:pre [(s/valid? :app.util/data d)]}
-  (let [data-blocks (partition-all aes-block-size d)
-        num-blocks (count data-blocks)
-        key-blocks (take num-blocks keystream)
-        key-bytes (take (count d) (apply concat key-blocks))]
+  (let [key-bytes (take (count d) keystream)]
     (doall (xor d key-bytes))))
 
 (defn ctr-crypt
@@ -123,6 +120,3 @@
   [nonce k d]
   {:pre [(s/valid? :app.util/data d)]}
   (stream-crypt (ctr-keystream nonce k) d))
-
-
-;;; MT19937-based CTR cipher
