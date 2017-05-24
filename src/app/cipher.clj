@@ -104,11 +104,13 @@
        (putLong (long x))
        (array))))
 
-(defn- ctr-keystream [nonce k]
-  (let [nonce-bytes (le-64bit-block nonce)
-        counters (map le-64bit-block (iterate inc 0))
-        nonce-counters (map concat (repeat nonce-bytes) counters)]
-    (mapcat (partial ecb-encrypt k) nonce-counters)))
+(defn ctr-keystream
+  ([k] (ctr-keystream 0 k))
+  ([nonce k]
+   (let [nonce-bytes (le-64bit-block nonce)
+         counters (map le-64bit-block (iterate inc 0))
+         nonce-counters (map concat (repeat nonce-bytes) counters)]
+     (mapcat (partial ecb-encrypt k) nonce-counters))))
 
 (defn stream-crypt [keystream d]
   {:pre [(s/valid? :app.util/data d)]}
@@ -117,6 +119,7 @@
 
 (defn ctr-crypt
   "Works for both decryption and encryption, just depends on whether you pass in plain data or cipher data"
-  [nonce k d]
-  {:pre [(s/valid? :app.util/data d)]}
-  (stream-crypt (ctr-keystream nonce k) d))
+  ([k d] (ctr-crypt 0 k d))
+  ([nonce k d]
+   {:pre [(s/valid? :app.util/data d)]}
+   (stream-crypt (ctr-keystream nonce k) d)))
