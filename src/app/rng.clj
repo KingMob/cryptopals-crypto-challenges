@@ -8,7 +8,10 @@
             [medley.core :refer [interleave-all]])
   (:import [org.apache.commons.math3.random MersenneTwister]))
 
+;; Complete implementation of the Mersenne Twister random number generator.
+;; See https://en.wikipedia.org/wiki/Mersenne_Twister for details
 
+;; Constants defined in the MT algorithm
 (def ^:const w 32)
 (def ^:const n 624)
 (def ^:const m 397)
@@ -24,7 +27,7 @@
 (def ^:const l 18)
 
 
-
+;; Atom to hold MT state. Includes a vector of ints and the current position in the vector
 (def MT (atom {:mt (vector-of :long)
                :index (inc n)}))
 (def ^:const lower-mask (dec (<< 1 r)))
@@ -32,7 +35,9 @@
 
 
 
-(defn- mt-seed-i [mt i]
+(defn- mt-seed-i
+  "Child function to seed the MT state at a given index"
+  [mt i]
   (let [prev (mt (dec i))]
     (uint32 (+ (* f
                   (u32/bit-xor
@@ -40,7 +45,9 @@
                    (>> prev (- w 2))))
                i))))
 
-(defn mt-seed [seed]
+(defn mt-seed
+  "Initializes the MT with the given seed."
+  [seed]
   (swap! MT (fn [MT seed]
               (let [MT (-> MT
                            (assoc :index n)
@@ -51,7 +58,9 @@
                  (range 1 n))))
          seed))
 
-(defn- mt-twist-1 [mt]
+(defn- mt-twist-1
+  "Child twist operation. Generates n (624) new values."
+  [mt]
   (reduce
    (fn [mt i]
      (let [curr (mt i)
@@ -67,19 +76,25 @@
    mt
    (range 0 n)))
 
-(defn mt-twist []
+(defn mt-twist
+  "Twist operation. Generates a new set of values."
+  []
   (swap! MT #(assoc %
               :mt (mt-twist-1 (:mt %))
               :index 0)))
 
-(defn mt-temper [mt-val]
+(defn mt-temper
+  "Temper operation."
+  [mt-val]
   (as-> (uint32 mt-val) y
     (u32/bit-xor y (u32/bit-and (>>> y u) d))
     (u32/bit-xor y (u32/bit-and (<< y s) b))
     (u32/bit-xor y (u32/bit-and (<< y t) c))
     (u32/bit-xor y (>>> y l))))
 
-(defn mt-extract-number []
+(defn mt-extract-number
+  "Extract the next sumber in the sequence. If 624 numbers have been extracted, calls mt-twist to generate new ones."
+  []
   (let [curr-index (:index @MT)]
     (when (>= curr-index n)
       (when (> curr-index n)

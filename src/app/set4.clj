@@ -39,3 +39,9 @@
                                    cipher-data-25
                                    new-plain-data])]
   (println (data->string orig-plain-data)))
+
+;;; Using CTR to encrypt a filesystem creates the problem that any given byte
+;;; is being XORed the same way, since there's no chaining/feedback. You know
+;;; what the encrypted contents are, so if you overwrite any file with chosen
+;;; plaintext, you can decrypt the original with simple XORing. It's effectively
+;;; key/nonce reuse.
