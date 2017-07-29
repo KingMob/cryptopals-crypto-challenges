@@ -1,3 +1,5 @@
+[![CircleCI](https://circleci.com/gh/KingMob/cryptopals-crypto-challenges.svg?style=svg)](https://circleci.com/gh/KingMob/cryptopals-crypto-challenges)
+
 # About
 
  The [Cryptopals challenges](https://www.cryptopals.com) in Clojure. They are a series of exercises designed to demostrate how to break cryptography in the real-world. They were originally created by Matasano, and are now hosted by the NCC Group. Thanks to both for sharing these, they're a blast!
