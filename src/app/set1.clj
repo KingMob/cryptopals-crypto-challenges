@@ -36,7 +36,8 @@
        (map hex->data)
        (mapcat (partial chi2-results xor-chars))
        (sort-by :chi2)
-       (take 3)))
+       (take 3)
+       (println)))
 
 ;; Set 1, challenge 5
 (def ice-ice-baby "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal")
@@ -63,7 +64,7 @@
                           (nthrest input-6)
                           (take-nth ksize)
                           (most-likely-xor-byte))))))})))
-
+(println input-6-candidate-keys)
 ;; But it's the wax that the Terminator X spun
 
 ;; Set 1, challenge 7
@@ -77,14 +78,13 @@
 
 ;; Set 1, challenge 8
 ;; (tufte/add-basic-println-handler! {})
-(def aes-block-size 16)
 (def input-8
   (mapv hex-decode
         (str/split-lines (slurp (io/file (io/resource "8.txt"))))))
 
 ;; Looking for dupes works because the odds of two random blocks
 ;; of 16 bytes equaling each other is astronomically low
-(def dupe-block-counts
+(def dupe-block-counts-8
   (for [cipher-text input-8]
     (let [blocks (partition aes-block-size cipher-text)]
       (->> blocks
@@ -92,7 +92,7 @@
            (filter #(< 1 (second %)))
            (count)))))
 
-(def probably-encrypted (input-8 (.indexOf dupe-block-counts (apply max dupe-block-counts))))
+(def probably-encrypted (input-8 (.indexOf dupe-block-counts-8 (apply max dupe-block-counts-8))))
 
 ;; Unfortunately, breaking it was quite a bit harder...didn't happen
 ;; based on most likely xor bytes
